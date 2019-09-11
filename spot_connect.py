@@ -1,14 +1,32 @@
 """
 Launch and connect to spot instances
 
-Example execution from windows command prompt: 
-    $ cd ./Spot-Instance-AWS
-    $ python spot_connect.py -n test -p default -s test.sh
+Examples: 
+  Spot instance launch from windows command prompt: 
+       $ cd ./Spot-Instance-AWS
+       $ python spot_connect.py -n test -p default -s test.sh
 
-Update of https://peteris.rocks/blog/script-to-launch-amazon-ec2-spot-instances/
+  Datasync spot instance from windows command prompt: 
+       $ cd ./Spot-Instance-AWS
+       $ python spot_connect.py -n datasync -p datasync 
+    
+Notes: 
+  <datasync>: Run datasync and spot instance under the same regions but with different names, the datasync requires a special AMI that needs its own instance.
+              If `enable_nfs` and `enable_ds` are True when each is launched under different names, instances should still be able to interact with one another. 
 
-Imports: Script will install non-native requirements automatically 
+  <configuration>: the aws client has already been configured using the awscli through the anaconda prompt.   
+                   To do this `pip install awscli` and from the anaconda (or other python prompt) run `aws config` and follow the prompts.  
+
+References: 
+  Part of this project is a direct update for use with boto3 of https://peteris.rocks/blog/script-to-launch-amazon-ec2-spot-instances/ 
+  
+WARNINGS: 
+  1) If `efs_mount.sh` fails because it cannot connect to port 22 when first creating an instance check the Status Checks for the instance in the console. 
+     When the status checks is "initializing..." port 22 is not active, wait until its status is "None" and then rerun the script.
+  
+**Imports: Script will install non-native requirements automatically 
 """
+
 try:
     import paramiko
 except:
@@ -25,13 +43,20 @@ try:
     import boto3
 except:
     import pip
-    pip.main(['install', 'netaddr'])    
+    pip.main(['install', 'boto3'])    
     import boto3
+try: 
+    from scp import SCPClient
+except: 
+    import pip 
+    pip.main(['install', 'boto3'])
+    from scp import SCPClient
+    
 import time, os, sys, argparse 
 
 
 
-def launch_spot_instance(spotid, profile, spot_wait_sleep=5, instance_wait_sleep=5, key_pair_dir=os.getcwd(), enable_nfs=True):
+def launch_spot_instance(spotid, profile, spot_wait_sleep=5, instance_wait_sleep=5, key_pair_dir=os.getcwd(), enable_nfs=True, enable_ds=True):
     '''
     Launch a spot instance using the preconfigured aws account on boto3. Returns instance ID. 
     __________
@@ -44,6 +69,9 @@ def launch_spot_instance(spotid, profile, spot_wait_sleep=5, instance_wait_sleep
         > region : the region to access
     - spot_wait_sleep : how much time to wait between each probe of whether the spot request has been placed 
     - instance_wait_sleep : how much time to wait between each probe of whether the spot request has been filled
+    - key_pair_dir : string. directory to store the private key files
+    - enable_nfs : bool, default True. When true, add NFS ingress rules to security group (TCP access from port 2049)
+    - enable_ds : bool, default True. When true, add HTTP ingress rules to security group (TCP access from port 80)
     '''
 
     client = boto3.client('ec2', region_name=profile['region'])                # Connect to ec2 cloud instance 
@@ -56,10 +84,10 @@ def launch_spot_instance(spotid, profile, spot_wait_sleep=5, instance_wait_sleep
         with open(key_pair_dir+'/'+profile['key_pair'][1], 'w') as file:       # Download the private key into the CW
             file.write(keypair['KeyMaterial'])
             file.close()
-        print('...created')
+        print('Created')
     except Exception as e: 
         if 'InvalidKeyPair.Duplicate' in str(e): 
-            print('...already exists')
+            print('Already exists')
         else: 
             raise e 
 
@@ -68,7 +96,7 @@ def launch_spot_instance(spotid, profile, spot_wait_sleep=5, instance_wait_sleep
             print('Creating security group...')
             sg = client.create_security_group(GroupName='SG-'+spotid,          # Create a security group for the current spot instance id 
                                               Description='SG for '+spotid)
-            if enable_nfs: 
+            if enable_nfs:                                                     
                 client.authorize_security_group_ingress(GroupName='SG-'+spotid,# Add NFS rules (port 2049) in order to connect an EFS instance 
                                                         IpPermissions=[
                                                                 {'FromPort': 2049,
@@ -77,6 +105,28 @@ def launch_spot_instance(spotid, profile, spot_wait_sleep=5, instance_wait_sleep
                                                                  'ToPort': 2049,
                                                                 }
                                                         ])   
+            if enable_ds:                                                      # Add ingress & egress rules to enable datasync
+                client.authorize_security_group_ingress(GroupName='SG-'+spotid,# Add HTTP and HTTPS rules (port 80 & 443) in order to connect to datasync agent
+                                                        IpPermissions=[
+                                                                {'FromPort': 80,
+                                                                 'IpProtocol': 'tcp',
+                                                                 'IpRanges': [{'CidrIp': '0.0.0.0/0'}],
+                                                                 'ToPort': 80,
+                                                                },
+                                                                {'FromPort': 443,
+                                                                 'IpProtocol': 'tcp',
+                                                                 'IpRanges': [{'CidrIp': '0.0.0.0/0'}],
+                                                                 'ToPort': 443,
+                                                                }                                        
+                                                        ])
+                client.authorize_security_group_egress(GroupId=sg['GroupId'],  # Add HTTPS egress rules (port 443) in order to connect datasync agent instance to AWS 
+                                                        IpPermissions=[
+                                                                {'FromPort': 443,
+                                                                 'IpProtocol': 'tcp',
+                                                                 'IpRanges': [{'CidrIp': '0.0.0.0/0'}],
+                                                                 'ToPort': 443,
+                                                                }                                        
+                                                        ]) 
             if 'firewall_ingress' in profile:                                  # Define ingress rules OTHERWISE YOU WILL NOT BE ABLE TO CONNECT
                 client.authorize_security_group_ingress(GroupName='SG-'+spotid,
                                                         IpPermissions=[
@@ -93,10 +143,10 @@ def launch_spot_instance(spotid, profile, spot_wait_sleep=5, instance_wait_sleep
             if 'firewall_egress' in profile:
                 # TODO : parameters for sg_egress and applplication to client.authorize_security_group_egress (Not necessary to establish a connection)
                 pass            
-            print('...created')
+            print('Created')
         except Exception as e:
             if 'InvalidGroup.Duplicate' in str(e): 
-                print('...already exists')
+                print('Already exists')
                 sg = client.describe_security_groups(Filters=[{'Name':'group-name','Values':['SG-'+spotid]}])['SecurityGroups'][0]
             else: 
                 raise e 
@@ -151,10 +201,10 @@ def launch_spot_instance(spotid, profile, spot_wait_sleep=5, instance_wait_sleep
             if 'InstanceId' in spot_req:                                       # If an instance ID was returned with the spot request we exit the while loop 
                 instance_id = spot_req['InstanceId']
             else: 
-                print('.')                                             # Otherwise we continue to wait 
+                print('.')                                                     # Otherwise we continue to wait 
                 time.sleep(spot_wait_sleep)
         else: 
-            print('.')                                                 # If a new spot request was submitted it may take a moment to register
+            print('.')                                                         # If a new spot request was submitted it may take a moment to register
             time.sleep(spot_wait_sleep)                                        # Wait and attempt to connect again 
 
     print('Retrieving instance by id')
@@ -230,14 +280,26 @@ def launch_efs(system_name, region='us-west-2', launch_wait=3):
         while not initiated:                                                   # Wait until the file system is detectable 
             try: 
                 file_system = client.describe_file_systems(CreationToken=system_name)['FileSystems'][0]
+                initiated=True
             except: 
                 print('.')
                 time.sleep(launch_wait)
-        print('detected')
+        print('Detected')
     else: 
         print('EFS file system already exists...')
         file_system = file_systems[0]                                          # If the file system exists 
                 
+    available=False
+    print('Waiting for availability...')
+    while not available: 
+        file_system = client.describe_file_systems(CreationToken=system_name)['FileSystems'][0]
+        if file_system['LifeCycleState']=='available':
+            available=True
+            print('Available')
+        else: 
+            print('.')
+            time.sleep(launch_wait)
+        
     return file_system 
 
 
@@ -276,7 +338,7 @@ def retrieve_efs_mount(file_system_name, instance, region='us-west-2', mount_wai
             except: 
                 print('.')
                 time.sleep(mount_wait)
-        print('detected')
+        print('Detected')
     else: 
         mount_target = mount_targets[0]
     
@@ -292,19 +354,6 @@ def retrieve_efs_mount(file_system_name, instance, region='us-west-2', mount_wai
         f.close() 
             
     return mount_target, instance_dns, filesystem_dns
-
-
-
-def terminate_instance(instance_id):
-    '''Terminate  an instance using the instance ID'''
-    if type(instance_id) is str: 
-        instances = [instance_id]
-    elif type(instance_id) is list: 
-        instances = instance_id
-    else: 
-        raise Exception('instance_id arg must be str or list')
-    ec2 = boto3.resource('ec2')
-    ec2.instances.filter(InstanceIds=instances).terminate()
 
 
 
@@ -333,8 +382,71 @@ def run_script(instance, user_name, script_file, port=22):
         print(sys.stderr, 'Ctrl-C, stopping')
     client.close()                                                             # Close the connection 
     exit_code = session.recv_exit_status()
-    print(sys.stderr, 'Exit code: ' + str(exit_code))
+    print('Closed connection. Exit code: ' + str(exit_code))
     return exit_code == 0
+
+
+
+def upload_to_ec2(instance, user_name, files, remote_dir=None):
+    '''
+    Upload files directly to an EC2 instance. This method can be slow. 
+    __________
+    parameters 
+    - instance : dict. Response dictionary from ec2 instance describe_instances method 
+    - user_name : string. SSH username for accessing instance, default usernames for AWS images can be found at https://alestic.com/2014/01/ec2-ssh-username/
+    - files : string or list of strings. single file, list of files or directory to upload. If it is a directory end in "/" 
+    - remote_dir : b'.'  string.The directory on the instance where the files will be uploaded to 
+    '''
+    print('Connecting...')
+    client = connect_to_instance(instance['PublicIpAddress'],instance['KeyName'],username='ec2-user',port=22)
+    print('Connected. Uploading files...')
+    scp = SCPClient(client.get_transport())
+    try: 
+        scp.put(files, recursive=True, remote_path=remote_dir)
+    except Exception as e: 
+        raise e
+    print('Uploaded to %s' % remote_dir)
+    return True 
+
+
+
+def terminate_instance(instance_id):
+    '''Terminate  an instance using the instance ID'''
+    if type(instance_id) is str: 
+        instances = [instance_id]
+    elif type(instance_id) is list: 
+        instances = instance_id
+    else: 
+        raise Exception('instance_id arg must be str or list')
+    ec2 = boto3.resource('ec2')
+    ec2.instances.filter(InstanceIds=instances).terminate()
+
+
+
+# TODO: add an active command prompt class or method. Example: http://web.archive.org/web/20170912043432/http://jessenoller.com/2009/02/05/ssh-programming-with-paramiko-completely-different/
+# def active_prompt(instance, user_name, port=22):
+#     client = connect_to_instance(instance['PublicIpAddress'],instance['KeyName'],username=user_name,port=port)
+#     print('Instance prompt open, using image OS. Type "exit" to end active prompt session')
+#     command='pwd'
+#     stdin, stdout, stderr = client.exec_command(command)                                      # Execute a command or .sh script (unix or linux console)
+#     try:
+#         currdir = ''
+#         for line in stdout:
+#             currdir+=line.rstrip()                                           # Show the output 
+#     except (KeyboardInterrupt, SystemExit):
+#         print(sys.stderr, 'Ctrl-C, stopping')
+
+#     while command!="exit":
+#         command = input(str(currdir)+' > ')
+#         stdin.write(command)
+#         stdin.flush()
+#         data = stdout.read.splitlines()
+#         for line in data:
+#             print(line.rstrip())
+            
+#     client.close()                                                           # Close the connection 
+#     print('Exit code: 0')
+#     return True
 
 
 
@@ -345,16 +457,31 @@ if __name__ == '__main__':                                                     #
                         'image_id':'ami-0859ec69e0492368e',                    # Image ID from AWS. go to the launch-wizard to get the image IDs or use the boto3 client.describe_images() with Owners of Filters parameters to reduce wait time and find what you need.
                         'instance_type':'t2.micro',                            # Get a list of instance types and prices at https://aws.amazon.com/ec2/spot/pricing/ 
                         'price':'0.004',
-                        'region':'us-west-2',
+                        'region':'us-west-2',                                  # All settings for us-west-2. Parameters (including prices) can change by region, make sure to review all parameters if changing regions.  
                         'scripts':['efs_mount.sh'],                            # By default, execute the bash script to mount the EFS file storage on the spot instance 
                         'username':'ec2-user',                                 # This will usually depend on the operating system of the image used. For a list of operating systems and defaul usernames check https://alestic.com/2014/01/ec2-ssh-username/
-                        }
-            }
-    
+                        'efs_mount':True                                       # If true will check for an EFS mount in the instance, if not it will create a file system or use an existing one and mount it. 
+                        },
+            "datasync":{'firewall_ingress': ('tcp', 22, 22, '0.0.0.0/0'),      # must enable nfs, http and other port ingress depending on endpoints https://docs.aws.amazon.com/datasync/latest/userguide/requirements.html#datasync-network
+                        'image_id':'ami-0f2e06a04ee62ab37',                    # Datasync Image ID from AWS. List by region at https://docs.aws.amazon.com/datasync/latest/userguide/deploy-agents.html#ec2-deploy-agent 
+                        'instance_type':'t2.micro', # 'm5.2xlarge',                         # For recommended instance types for datasync https://docs.aws.amazon.com/datasync/latest/userguide/requirements.html#ec2-instance-types
+                        'price': '0.004',#'0.15',                                       # Spot instance pricing list at https://aws.amazon.com/ec2/spot/pricing/ 
+                        'region':'us-west-2',                                  # All settings for us-west-2. Datasync images vary by region, review all parameters if using a different region
+                        'scripts':[],
+                        'username':'ec2-user',
+                        'efs_mount':False                                      # No need to mount an EFS on a datasync agent (ec2 Instance with a datasync image)
+                        },
+#            "gateway":{'image_id':'ami-0a832317c0f4c5d01',}
+    }
+
     parser = argparse.ArgumentParser(description='Launch spot instance')
     parser.add_argument('-n', '--name', help='Name of the spot instance', required=True)
     parser.add_argument('-p', '--profile', help='Profile', default=list(profiles.keys())[0], choices=profiles.keys())
     parser.add_argument('-s', '--script', help='Script path', action='append', default=[])
+    parser.add_argument('-fs', '--filesystem', help='Elastic File System name', default='')
+    parser.add_argument('-u', '--upload', help='File or directory to upload', default='')
+    parser.add_argument('-rp', '--remotepath', help='Directory on EC2 instance to upload file to', default='')
+#   parser.add_argument('-a', '--prompt', help='Leave an active prompt open after running scripts', default=False)
     args = parser.parse_args()
     
     profile = profiles[args.profile]
@@ -364,16 +491,27 @@ if __name__ == '__main__':                                                     #
     except Exception as e:
         raise e
         sys.exit(1)
-        
-    try:                                                                       # Create and/or mount an EFS to the instance 
-        mount_target, instance_dns, filesystem_dns = retrieve_efs_mount(args.name, instance)
-    except Exception as e: 
-        raise e 
-        sys.exit(1)        
+    
+    if profile['efs_mount']: 
+        if args.filesystem=='':                                                # If no filesystem name is submitted 
+            fs_name = args.name                                                # Retrieve or create a filesystem with the same name as the instance 
+        else: 
+            fs_name = args.filesystem                                          
+        try:                                                                   # Create and/or mount an EFS to the instance 
+            mount_target, instance_dns, filesystem_dns = retrieve_efs_mount(fs_name, instance)
+        except Exception as e: 
+            raise e 
+            sys.exit(1)        
 
     for script in profile['scripts'] + args.script:
+        print('\nExecuting script "%s"...' % str(script))
         if not run_script(instance, profile['username'], script):
             break
+    
+#   if args.prompt:
+#       active_prompt(instance, profile['username'])
+        
+    
 
         
         
