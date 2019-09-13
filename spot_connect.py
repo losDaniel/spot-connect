@@ -251,6 +251,8 @@ def connect_to_instance(ip, keyfile, username='ec2-user', port=22, timeout=10):
         try:
             # use the public IP address to connect to an instance over the internet, default username is ubuntu
             ssh_client.connect(ip, username=username, pkey=k, port=port, timeout=timeout)
+            console = ssh_client.invoke_shell()                                # Recently added 
+            console.keep_this = ssh_client                                     # Also
             connected = True
             break
         except Exception as e:
@@ -259,7 +261,7 @@ def connect_to_instance(ip, keyfile, username='ec2-user', port=22, timeout=10):
             if retries>=5: 
                 raise e  
     print('Connected')
-    return ssh_client
+    return console                                                             # changed from ssh_client
 
 
 
@@ -364,21 +366,31 @@ def retrieve_efs_mount(file_system_name, instance, region='us-west-2', mount_wai
     if len(mount_targets)==0:                                                  # If no mount targets are detected on the file system
         print('No mount target detected. Creating mount target...')
         subnet_id = instance['SubnetId']                                       # Gather the instance subnet ID. Subnets are your personal cloud, for a full explanation see https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Subnets.html
-        security_group_id = instance['SecurityGroups'][0]['GroupId']           # Get the instance's security group 
+        security_group_id = instance['SecurityGroups'][0]['GroupId']           # Get the instance's security group
         
         ec2 = boto3.resource('ec2')                                            
         subnet = ec2.Subnet(subnet_id)                                         # Get the features of the subnet
         net = IPNetwork(subnet.cidr_block)                                     # Get the IPv4 CIDR block assigned to the subnet.
         ips = [str(x) for x in list(net[4:-1])]                                # The CIDR block is a block or range of IP addresses, we only need to assign one of these to a single mount
-    
-        response = client.create_mount_target(                                 # Create the mount target 
-            FileSystemId=file_system_id,                                       # Under the file system just created 
-            SubnetId=subnet_id,                                                # Under the same subnet as the EC2 instance you've just created 
-            IpAddress=ips[0],                                                  # Assign it the first IP Adress from the CIDR block assigned to the subnet 
-            SecurityGroups=[
-                security_group_id,                                             # Apply the security group which must have ingress rules to allow NFS client connections (enable port 2049)
-            ]
-        )
+        ipid = 0 
+        complete = False 
+        while not complete: 
+            try: 
+                response = client.create_mount_target(                                 # Create the mount target 
+                    FileSystemId=file_system_id,                                       # Under the file system just created 
+                    SubnetId=subnet_id,                                                # Under the same subnet as the EC2 instance you've just created 
+                    IpAddress=ips[ipid],                                                  # Assign it the first IP Adress from the CIDR block assigned to the subnet 
+                    SecurityGroups=[
+                        security_group_id,                                             # Apply the security group which must have ingress rules to allow NFS client connections (enable port 2049)
+                    ]
+                )
+                complete=True
+            except Exception as e: 
+                if 'IpAddressInUse' in str(e):
+                    ipid+=1 
+                else: 
+                    raise(e) 
+
         initiated = False
         print('Initializing...')
         while not initiated: 
@@ -407,7 +419,7 @@ def retrieve_efs_mount(file_system_name, instance, region='us-west-2', mount_wai
 
 
 
-def upload_to_ec2(instance, user_name, files, remote_dir=None):
+def upload_to_ec2(instance, user_name, files, remote_dir=b'.'):
     '''
     Upload files directly to an EC2 instance. This method can be slow. 
     __________
@@ -451,7 +463,7 @@ if __name__ == '__main__':                                                     #
                         'instance_type':'t2.micro',                            # Get a list of instance types and prices at https://aws.amazon.com/ec2/spot/pricing/ 
                         'price':'0.004',
                         'region':'us-west-2',                                  # All settings for us-west-2. Parameters (including prices) can change by region, make sure to review all parameters if changing regions.  
-                        'scripts':['efs_mount.sh'],                            # By default, execute the bash script to mount the EFS file storage on the spot instance 
+                        'scripts':[],                            
                         'username':'ec2-user',                                 # This will usually depend on the operating system of the image used. For a list of operating systems and defaul usernames check https://alestic.com/2014/01/ec2-ssh-username/
                         'efs_mount':True                                       # If true will check for an EFS mount in the instance and if one is not found it will create a file system or use an existing one and mount it. 
                         },
@@ -473,7 +485,7 @@ if __name__ == '__main__':                                                     #
     parser.add_argument('-s', '--script', help='Script path', action='append', default=[])
     parser.add_argument('-f', '--filesystem', help='Elastic File System name', default='')
     parser.add_argument('-u', '--upload', help='File or directory to upload', default='')
-    parser.add_argument('-r', '--remotepath', help='Directory on EC2 instance to upload via ordinary NFS', default='')
+    parser.add_argument('-r', '--remotepath', help='Directory on EC2 instance to upload via ordinary NFS', default=b'.')
     parser.add_argument('-a', '--activeprompt', help='If "True" leave an active shell open after running scripts', default=False)
     args = parser.parse_args()
     
@@ -486,6 +498,7 @@ if __name__ == '__main__':                                                     #
         sys.exit(1)
     
     if profile['efs_mount']: 
+        print('Profile requesting EFS mount...')
         if args.filesystem=='':                                                # If no filesystem name is submitted 
             fs_name = args.name                                                # Retrieve or create a filesystem with the same name as the instance 
         else: 
@@ -495,13 +508,26 @@ if __name__ == '__main__':                                                     #
         except Exception as e: 
             raise e 
             sys.exit(1)        
-
+        print('Connecting to instance to link EFS...')
+        run_script(instance, profile['username'], 'efs_mount.sh')
+            
+    if args.upload!='':        
+        files_to_upload = [] 
+        if type(args.upload)==str: 
+            files_to_upload=[os.path.abspath(os.getcwd()+'/'+args.upload)]
+        elif type(args.upload)==list:
+            for file in args.upload:
+                files_to_upload.append(os.path.abspath(os.getcwd()+'/'+file))
+        else: 
+            raise Exception('Upload argument must be string or list of strings')
+        upload_to_ec2(instance, profile['username'], files_to_upload, remote_dir=args.remotepath)    
+    
     for script in profile['scripts'] + args.script:
         print('\nExecuting script "%s"...' % str(script))
         if not run_script(instance, profile['username'], script):
             break
     
-    if args.prompt:
+    if args.activeprompt:
         active_shell(instance, profile['username'])
         
     
