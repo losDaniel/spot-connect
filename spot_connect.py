@@ -19,11 +19,7 @@ Notes:
 
 References: 
   Part of this project is a direct update for use with boto3 of https://peteris.rocks/blog/script-to-launch-amazon-ec2-spot-instances/ 
-  
-WARNINGS: 
-  1) If `efs_mount.sh` fails because it cannot connect to port 22 when first creating an instance check the Status Checks for the instance in the console. 
-     When the status checks is "initializing..." port 22 is not active, wait until its status is "None" and then rerun the script.
-  
+    
 **Imports: Script will install non-native requirements automatically 
 """
 
@@ -52,7 +48,7 @@ except:
     pip.main(['install', 'boto3'])
     from scp import SCPClient
     
-import time, os, sys, argparse 
+import time, os, sys, argparse, interactive
 
 
 
@@ -79,21 +75,19 @@ def launch_spot_instance(spotid, profile, spot_wait_sleep=5, instance_wait_sleep
     if 'key_pair' not in profile:                                              # If no key_par exists for the current spot instance id 
         profile['key_pair']=('KP-'+spotid,'KP-'+spotid+'.pem')                 # Log a keypair in the profile dictionary 
     try: 
-        print('Creating key pair...')
         keypair = client.create_key_pair(KeyName=profile['key_pair'][0])       # Create a key pair on AWS
         with open(key_pair_dir+'/'+profile['key_pair'][1], 'w') as file:       # Download the private key into the CW
             file.write(keypair['KeyMaterial'])
             file.close()
-        print('Created')
+        print('Key pair created...')
     except Exception as e: 
         if 'InvalidKeyPair.Duplicate' in str(e): 
-            print('Already exists')
+            print('Key pair detected, re-using...')
         else: 
             raise e 
 
     if 'security_group' not in profile:                                        # If no security group was submitted 
         try: 
-            print('Creating security group...')
             sg = client.create_security_group(GroupName='SG-'+spotid,          # Create a security group for the current spot instance id 
                                               Description='SG for '+spotid)
             if enable_nfs:                                                     
@@ -143,10 +137,10 @@ def launch_spot_instance(spotid, profile, spot_wait_sleep=5, instance_wait_sleep
             if 'firewall_egress' in profile:
                 # TODO : parameters for sg_egress and applplication to client.authorize_security_group_egress (Not necessary to establish a connection)
                 pass            
-            print('Created')
+            print('Security Group Created...')
         except Exception as e:
             if 'InvalidGroup.Duplicate' in str(e): 
-                print('Already exists')
+                print('Security group detected, re-using...')
                 sg = client.describe_security_groups(Filters=[{'Name':'group-name','Values':['SG-'+spotid]}])['SecurityGroups'][0]
             else: 
                 raise e 
@@ -158,8 +152,6 @@ def launch_spot_instance(spotid, profile, spot_wait_sleep=5, instance_wait_sleep
                                                                      {'Name':'state','Values':['open','active']}])['SpotInstanceRequests']
     
     if len(spot_requests)>0:                                                   # If there are open/active instance requests  
-        print('Existing unresolved spot requests')
-        print('Reusing existing spot request')
         spot_req_id = spot_requests[0]['SpotInstanceRequestId']                # Re-use the first one that was found 
     else:
         print('Requesting spot instance')                                      
@@ -185,15 +177,15 @@ def launch_spot_instance(spotid, profile, spot_wait_sleep=5, instance_wait_sleep
         )
         spot_req_id = response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
     # check if the instance id has been created (if the instance has been created)
-    print('Initializing...')
+    attempt = 0 
     instance_id = None
     spot_tag_added = False
-    while not instance_id:                                                     # Wait for the instance to initialize
-                                                                               # Retrieve the request by ID 
+    while not instance_id:                                                     # Wait for the instance to initialize, retrieve the request by ID 
         spot_req = client.describe_spot_instance_requests(Filters=[{'Name':'spot-instance-request-id', 'Values':[spot_req_id]}])['SpotInstanceRequests']
         if len(spot_req)>0:          
             spot_req = spot_req[0]                                             
-            if not spot_tag_added:                                             # If no tag has been added yet add a tag to the request with the spot instance name 
+            if not spot_tag_added:     
+                                                                               # If no tag has been added yet add a tag to the request with the spot instance name 
                 client.create_tags(Resources=[spot_req['SpotInstanceRequestId']], Tags=[{'Key':'Name','Value':spotid}])
                 spot_tag_added=True
             if spot_req['State']=='failed':                                    # If the request failed raise an exception 
@@ -204,8 +196,11 @@ def launch_spot_instance(spotid, profile, spot_wait_sleep=5, instance_wait_sleep
                 print('.')                                                     # Otherwise we continue to wait 
                 time.sleep(spot_wait_sleep)
         else: 
+            if attempt==0:
+                print('Launching...')
             print('.')                                                         # If a new spot request was submitted it may take a moment to register
             time.sleep(spot_wait_sleep)                                        # Wait and attempt to connect again 
+            attempt+=1 
 
     print('Retrieving instance by id')
     try: 
@@ -215,21 +210,27 @@ def launch_spot_instance(spotid, profile, spot_wait_sleep=5, instance_wait_sleep
         raise Exception('Request not submitted')
 
     print('Got instance: '+str(instance['InstanceId'])+'['+str(instance['State']['Name'])+']')
-    print('Waiting for instance to boot')
-    while not instance['State']['Name'] in ['running','terminated','shutting-down']:
+    attempt = 0 
+    instance_up = False
+    while not instance_up:
         print('.')
-        time.sleep(instance_wait_sleep)
-        reservations = client.describe_instances(InstanceIds=[instance_id])['Reservations']
-        instance = reservations[0]['Instances'][0]
-    if instance['State']['Name']!='running':                                   # Wait until the instance is runing to connect 
-        raise Exception('Instance was terminated')
+        instance_status = client.describe_instance_status(InstanceIds=[instance_id])['InstanceStatuses'][0]['InstanceStatus']['Status']
+        if instance_status!='initializing':
+            instance_up=True        
+        else:
+            if attempt==0:
+                print('Waiting for instance to boot')    
+            time.sleep(instance_wait_sleep)
+            attempt+=1 
+    if instance_status!='ok':                                                  # Wait until the instance is runing to connect 
+        raise Exception('Failed to boot, instance status: %s' % str(instance_status))
     print('Online')
 
     return instance, profile                                                   # Return the instance and profile in case a key and security group were added to the profile 
 
 
 
-def connect_to_instance(ip, keyfile, username='ubuntu', port=22, timeout=10):
+def connect_to_instance(ip, keyfile, username='ec2-user', port=22, timeout=10):
     '''
     Connect to the spot instance using paramiko's SSH client 
     __________
@@ -260,6 +261,55 @@ def connect_to_instance(ip, keyfile, username='ubuntu', port=22, timeout=10):
     print('Connected')
     return ssh_client
 
+
+
+def run_script(instance, user_name, script_file, port=22):
+    '''
+    Run a script on the the given instance 
+    __________
+    parameters
+    - instance : dict. Response dictionary from ec2 instance describe_instances method 
+    - user_name : string. SSH username for accessing instance, default usernames for AWS images can be found at https://alestic.com/2014/01/ec2-ssh-username/
+    - script_file : string. ".sh" file or linux/unix command (or other os resource) to execute on the instance command line 
+    - port : port to use to connect to the instance 
+    '''
+    script = open(script_file, 'r').read().replace('\r', '')
+    
+    client = connect_to_instance(instance['PublicIpAddress'],instance['KeyName'],username=user_name,port=port)
+    session = client.get_transport().open_session()
+    session.set_combine_stderr(True)                                           # Combine the error message and output message channels
+
+    session.exec_command(script)                                               # Execute a command or .sh script (unix or linux console)
+    stdout = session.makefile()                                                # Collect the output 
+    try:
+        for line in stdout:
+            print(line.rstrip())                                               # Show the output 
+    except (KeyboardInterrupt, SystemExit):
+        print(sys.stderr, 'Ctrl-C, stopping')
+    client.close()                                                             # Close the connection 
+    exit_code = session.recv_exit_status()
+    print('Closed connection. Exit code: ' + str(exit_code))
+    return exit_code == 0
+
+
+
+def active_shell(instance, user_name, port=22): 
+    '''
+    Leave a shell active
+    __________
+    parameters 
+    - instance : dict. Response dictionary from ec2 instance describe_instances method 
+    - user_name : string. SSH username for accessing instance, default usernames for AWS images can be found at https://alestic.com/2014/01/ec2-ssh-username/
+    - port : port to use to connect to the instance 
+    '''    
+    
+    client = connect_to_instance(instance['PublicIpAddress'],instance['KeyName'],username=user_name,port=port)
+    session = client.get_transport().open_session()
+    session.get_pty()
+    session.invoke_shell()
+    interactive.interactive_shell(session)
+    session.close() 
+    return True 
 
 
 def launch_efs(system_name, region='us-west-2', launch_wait=3):
@@ -309,7 +359,7 @@ def retrieve_efs_mount(file_system_name, instance, region='us-west-2', mount_wai
     file_system = launch_efs(file_system_name, region=region)                  # Launch or connect to an EFS 
     file_system_id = file_system['FileSystemId']
         
-    client = boto3.client('efs', region_name='us-west-2')                      # Connect and check for existing mount targets on the EFS  
+    client = boto3.client('efs', region_name=region)                           # Connect and check for existing mount targets on the EFS  
     mount_targets = client.describe_mount_targets(FileSystemId=file_system_id)['MountTargets']
     if len(mount_targets)==0:                                                  # If no mount targets are detected on the file system
         print('No mount target detected. Creating mount target...')
@@ -357,36 +407,6 @@ def retrieve_efs_mount(file_system_name, instance, region='us-west-2', mount_wai
 
 
 
-def run_script(instance, user_name, script_file, port=22):
-    '''
-    Run a script on the the given instance 
-    __________
-    parameters
-    - instance : dict. Response dictionary from ec2 instance describe_instances method 
-    - user_name : string. SSH username for accessing instance, default usernames for AWS images can be found at https://alestic.com/2014/01/ec2-ssh-username/
-    - port : port to use to connect to the instance 
-    - script_file : string. ".sh" file or linux/unix command (or other os resource) to execute on the instance command line 
-    '''
-    script = open(script_file, 'r').read().replace('\r', '')
-    
-    client = connect_to_instance(instance['PublicIpAddress'],instance['KeyName'],username=user_name,port=port)
-    session = client.get_transport().open_session()
-    session.set_combine_stderr(True)                                           # Combine the error message and output message channels
-
-    session.exec_command(script)                                               # Execute a command or .sh script (unix or linux console)
-    stdout = session.makefile()                                                # Collect the output 
-    try:
-        for line in stdout:
-            print(line.rstrip())                                               # Show the output 
-    except (KeyboardInterrupt, SystemExit):
-        print(sys.stderr, 'Ctrl-C, stopping')
-    client.close()                                                             # Close the connection 
-    exit_code = session.recv_exit_status()
-    print('Closed connection. Exit code: ' + str(exit_code))
-    return exit_code == 0
-
-
-
 def upload_to_ec2(instance, user_name, files, remote_dir=None):
     '''
     Upload files directly to an EC2 instance. This method can be slow. 
@@ -407,7 +427,7 @@ def upload_to_ec2(instance, user_name, files, remote_dir=None):
         raise e
     print('Uploaded to %s' % remote_dir)
     return True 
-
+    
 
 
 def terminate_instance(instance_id):
@@ -423,33 +443,6 @@ def terminate_instance(instance_id):
 
 
 
-# TODO: add an active command prompt class or method. Example: http://web.archive.org/web/20170912043432/http://jessenoller.com/2009/02/05/ssh-programming-with-paramiko-completely-different/
-# def active_prompt(instance, user_name, port=22):
-#     client = connect_to_instance(instance['PublicIpAddress'],instance['KeyName'],username=user_name,port=port)
-#     print('Instance prompt open, using image OS. Type "exit" to end active prompt session')
-#     command='pwd'
-#     stdin, stdout, stderr = client.exec_command(command)                                      # Execute a command or .sh script (unix or linux console)
-#     try:
-#         currdir = ''
-#         for line in stdout:
-#             currdir+=line.rstrip()                                           # Show the output 
-#     except (KeyboardInterrupt, SystemExit):
-#         print(sys.stderr, 'Ctrl-C, stopping')
-
-#     while command!="exit":
-#         command = input(str(currdir)+' > ')
-#         stdin.write(command)
-#         stdin.flush()
-#         data = stdout.read.splitlines()
-#         for line in data:
-#             print(line.rstrip())
-            
-#     client.close()                                                           # Close the connection 
-#     print('Exit code: 0')
-#     return True
-
-
-
 if __name__ == '__main__':                                                     # Main execution 
     
     profiles={
@@ -460,7 +453,7 @@ if __name__ == '__main__':                                                     #
                         'region':'us-west-2',                                  # All settings for us-west-2. Parameters (including prices) can change by region, make sure to review all parameters if changing regions.  
                         'scripts':['efs_mount.sh'],                            # By default, execute the bash script to mount the EFS file storage on the spot instance 
                         'username':'ec2-user',                                 # This will usually depend on the operating system of the image used. For a list of operating systems and defaul usernames check https://alestic.com/2014/01/ec2-ssh-username/
-                        'efs_mount':True                                       # If true will check for an EFS mount in the instance, if not it will create a file system or use an existing one and mount it. 
+                        'efs_mount':True                                       # If true will check for an EFS mount in the instance and if one is not found it will create a file system or use an existing one and mount it. 
                         },
             "datasync":{'firewall_ingress': ('tcp', 22, 22, '0.0.0.0/0'),      # must enable nfs, http and other port ingress depending on endpoints https://docs.aws.amazon.com/datasync/latest/userguide/requirements.html#datasync-network
                         'image_id':'ami-0f2e06a04ee62ab37',                    # Datasync Image ID from AWS. List by region at https://docs.aws.amazon.com/datasync/latest/userguide/deploy-agents.html#ec2-deploy-agent 
@@ -478,10 +471,10 @@ if __name__ == '__main__':                                                     #
     parser.add_argument('-n', '--name', help='Name of the spot instance', required=True)
     parser.add_argument('-p', '--profile', help='Profile', default=list(profiles.keys())[0], choices=profiles.keys())
     parser.add_argument('-s', '--script', help='Script path', action='append', default=[])
-    parser.add_argument('-fs', '--filesystem', help='Elastic File System name', default='')
+    parser.add_argument('-f', '--filesystem', help='Elastic File System name', default='')
     parser.add_argument('-u', '--upload', help='File or directory to upload', default='')
-    parser.add_argument('-rp', '--remotepath', help='Directory on EC2 instance to upload file to', default='')
-#   parser.add_argument('-a', '--prompt', help='Leave an active prompt open after running scripts', default=False)
+    parser.add_argument('-r', '--remotepath', help='Directory on EC2 instance to upload via ordinary NFS', default='')
+    parser.add_argument('-a', '--activeprompt', help='If "True" leave an active shell open after running scripts', default=False)
     args = parser.parse_args()
     
     profile = profiles[args.profile]
@@ -508,8 +501,8 @@ if __name__ == '__main__':                                                     #
         if not run_script(instance, profile['username'], script):
             break
     
-#   if args.prompt:
-#       active_prompt(instance, profile['username'])
+    if args.prompt:
+        active_shell(instance, profile['username'])
         
     
 
