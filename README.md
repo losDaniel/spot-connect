@@ -42,10 +42,16 @@ To launch an instance open your command prompt and use the following commands
 *Filesystem* creation token name for file system that you want to use. If `-f` option is not set and `efs_mount == True` in the `-p` (profile) option then the `-n` (name) is used to identify or create the elastic file system. 
 
 `-u` <br>
-*Upload* is the file path or directory that will be uploaded via paramiko ssh transfer. Files or folders are assumed to be in the current directory. Upload speed appears to depend only on internet speed and not instance type. *This upload process can be sub-optimal for larger datasets, I am currently developing the ability to automatically create the infrastructure necessary to setup AWS datasync which enables faster transfers from local or AWS data repos.*
+*Upload* is the file path or directory that will be uploaded via paramiko ssh transfer. Files or folders are assumed to be in the current directory. Upload speed appears to depends only on internet speed and not instance type. To give an idea of upload speed, it took me under 8 minutes to upload a 150MB compressed file on a busy 5 GH wifi connection. **Syntax for upload files:**
+
+	`-u C:\Data\file.txt`  # uploading one file 
+<br>
+	`-u C:\Data\file_1.txt,C:\MapData\file_2.zip`  #uploading a list of files 
 
 `-r` <br>
-*Remotepath* is the directory of the EC2 instance to upload the files in the `-u` (upload) option to. If the **remotepath** specified is in an EFS that has been mounted on the instance that data will persist in the EFS and be accessible to any other instance that is mounted on that EFS, even if the current instance is terminated. For more on this see the **Elastic File System** section below. 
+*Remotepath* is the directory of the EC2 instance to upload the files in the `-u` (upload) option to. If the **remotepath** specified is in an EFS that has been mounted on the instance that data will persist in the EFS and be accessible to any other instance that is mounted on that EFS, even if the current instance is terminated. For more on this see the **Elastic File System** section below. **Syntax for remotepath:**
+
+	`-r efs/data`  # forward slash, this file will be placed in the home director. For example, in AWS Linux instance that is `home/ec2-user/`
 
 `-a` <br>
 *Activepath* is a boolean (`True` or `False`) for whether to leave an active shell connected to the instance after the scripts have finished running (if your instance has a linux ami, for example, this will be a linux shell).
@@ -59,7 +65,7 @@ When an EFS is specified, this script will automatically create the bash script 
 
 ### Data Persisitence
 
-Elastic file systems are a type of file storage provided by AWS that expands as more data is added to it. Data can be added to the and EFS directly through an instance or via DataSync which is a separate process offered by AWS. I am currently building out the ability to automatically setup and run a DataSync to an instance. Any data you add the an EFS will persist such that if you mount an instance, upload data to the EFS folder, terminate the instance, launch a new instance, connect that instance to the same EFS (which you can do easily with the `-f` option) the data you uploaded earlier will automatically be available in the new instance. 
+Elastic file systems are a type of file storage provided by AWS that expands as more data is added to it. Data can be added to the and EFS directly through an instance or via DataSync which is a separate process offered by AWS. Datasync can be setup and run using spot instances. Any data you add to an EFS will persist such that if you mount an instance, upload data to the EFS folder, terminate the instance, launch a new instance, connect that instance to the same EFS (which you can do easily with the `-f` option) the data you uploaded earlier will automatically be available in the new instance. This makes it easy to resume work and save results quickly. 
 
 
 *Example data for the directory was downloaded from: https://data.world/datafiniti/wine-beer-and-liquor-reviews*

@@ -34,13 +34,14 @@ Notes:
 
 **Imports: Script will install non-native requirements automatically 
 """
+import pip._internal
 
 try:
     import boto3
 except:
-    import pip
-    pip.main(['install', 'boto3'])    
-    import boto3
+    pip._internal.main(['install', 'boto3'])
+    import boto3    
+
 import os, sys, argparse
 
 def absolute_file_paths(directory):

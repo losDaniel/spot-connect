@@ -22,30 +22,27 @@ References:
     
 **Imports: Script will install non-native requirements automatically 
 """
+import pip._internal
 
 try:
     import paramiko
 except:
-    import pip
-    pip.main(['install', 'paramiko'])    
+    pip._internal.main(['install', 'paramiko'])
     import paramiko    
 try:
     from netaddr import IPNetwork
 except:
-    import pip
-    pip.main(['install', 'netaddr'])    
-    from netaddr import IPNetwork
+    pip._internal.main(['install', 'netaddr'])
+    from netaddr import IPNetwork   
 try:
     import boto3
 except:
-    import pip
-    pip.main(['install', 'boto3'])    
-    import boto3
-try: 
+    pip._internal.main(['install', 'boto3'])
+    import boto3    
+try:
     from scp import SCPClient
-except: 
-    import pip 
-    pip.main(['install', 'boto3'])
+except:
+    pip._internal.main(['install', 'scp'])
     from scp import SCPClient
     
 import time, os, sys, argparse, interactive
@@ -513,13 +510,8 @@ if __name__ == '__main__':                                                     #
             
     if args.upload!='':        
         files_to_upload = [] 
-        if type(args.upload)==str: 
-            files_to_upload=[os.path.abspath(os.getcwd()+'/'+args.upload)]
-        elif type(args.upload)==list:
-            for file in args.upload:
-                files_to_upload.append(os.path.abspath(os.getcwd()+'/'+file))
-        else: 
-            raise Exception('Upload argument must be string or list of strings')
+        for file in args.upload.split(','):
+            files_to_upload.append(os.path.abspath(os.getcwd()+'/'+file))
         upload_to_ec2(instance, profile['username'], files_to_upload, remote_dir=args.remotepath)    
     
     for script in profile['scripts'] + args.script:
@@ -529,20 +521,3 @@ if __name__ == '__main__':                                                     #
     
     if args.activeprompt:
         active_shell(instance, profile['username'])
-        
-    
-
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
