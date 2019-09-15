@@ -39,11 +39,6 @@ try:
 except:
     pip._internal.main(['install', 'boto3'])
     import boto3    
-try:
-    from scp import SCPClient
-except:
-    pip._internal.main(['install', 'scp'])
-    from scp import SCPClient
     
 import time, os, sys, argparse, interactive
 
@@ -248,8 +243,6 @@ def connect_to_instance(ip, keyfile, username='ec2-user', port=22, timeout=10):
         try:
             # use the public IP address to connect to an instance over the internet, default username is ubuntu
             ssh_client.connect(ip, username=username, pkey=k, port=port, timeout=timeout)
-            console = ssh_client.invoke_shell()                                # Recently added 
-            console.keep_this = ssh_client                                     # Also
             connected = True
             break
         except Exception as e:
@@ -258,7 +251,7 @@ def connect_to_instance(ip, keyfile, username='ec2-user', port=22, timeout=10):
             if retries>=5: 
                 raise e  
     print('Connected')
-    return console                                                             # changed from ssh_client
+    return ssh_client
 
 
 
@@ -303,7 +296,9 @@ def active_shell(instance, user_name, port=22):
     '''    
     
     client = connect_to_instance(instance['PublicIpAddress'],instance['KeyName'],username=user_name,port=port)
-    session = client.get_transport().open_session()
+    console = client.invoke_shell()                                            
+    console.keep_this = client                                                
+    session = console.get_transport().open_session()
     session.get_pty()
     session.invoke_shell()
     interactive.interactive_shell(session)
@@ -406,13 +401,22 @@ def retrieve_efs_mount(file_system_name, instance, region='us-west-2', mount_wai
     
     with open('efs_mount.sh','w') as f:                                        # how to mount EFS on EC2: https://docs.aws.amazon.com/efs/latest/ug/wt1-test.html
         f.write('sudo yum -y install nfs-utils'+'\n')
-        f.write('mkdir ~/efs-mount-point'+'\n')
-        f.write('sudo mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport '+filesystem_dns+':/   ~/efs-mount-point '+'\n')
-        f.write('cd ~/efs-mount-point'+'\n')
+        f.write('mkdir ~/efs'+'\n')
+        f.write('sudo mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport '+filesystem_dns+':/   ~/efs '+'\n')
+        f.write('cd ~/efs'+'\n')
         f.write('sudo chmod go+rw .'+'\n')
+        f.write('mkdir ~/efs/data'+'\n')
         f.close() 
             
     return mount_target, instance_dns, filesystem_dns
+
+
+
+def printTotals(transferred, toBeTransferred):
+    '''Print paramiko upload transfer'''
+    print("Transferred: %.3f" % float(float(transferred)/float(toBeTransferred)), end="\r", flush=True)
+#	sys.stdout.write("Transferred: {0}\tOut of: {1}".format(transferred, toBeTransferred))
+#	sys.stdout.flush()
 
 
 
@@ -429,10 +433,12 @@ def upload_to_ec2(instance, user_name, files, remote_dir=b'.'):
     print('Connecting...')
     client = connect_to_instance(instance['PublicIpAddress'],instance['KeyName'],username='ec2-user',port=22)
     print('Connected. Uploading files...')
-    scp = SCPClient(client.get_transport())
+    stfp = client.open_sftp()
     try: 
-        scp.put(files, recursive=True, remote_path=remote_dir)
-    except Exception as e: 
+    	for f in files: 
+            print('Uploading %s' % str(f.split('\\')[-1]))
+            stfp.put(f, remote_dir+'/'+f.split('\\')[-1], callback=printTotals, confirm=True)
+    except Exception as e:
         raise e
     print('Uploaded to %s' % remote_dir)
     return True 
@@ -508,11 +514,15 @@ if __name__ == '__main__':                                                     #
         print('Connecting to instance to link EFS...')
         run_script(instance, profile['username'], 'efs_mount.sh')
             
+    st = time.time() 
+
     if args.upload!='':        
         files_to_upload = [] 
         for file in args.upload.split(','):
-            files_to_upload.append(os.path.abspath(os.getcwd()+'/'+file))
+            files_to_upload.append(os.path.abspath(file))
         upload_to_ec2(instance, profile['username'], files_to_upload, remote_dir=args.remotepath)    
+
+    print('Time to Upload: %s' % str(time.time()-st))
     
     for script in profile['scripts'] + args.script:
         print('\nExecuting script "%s"...' % str(script))
