@@ -19,6 +19,8 @@ To launch an instance open your command prompt and use the following commands
 
 `ptyhon spot_connect.py -n <name> -p <profile> -s <scripts> -f <filesystem> -u <files or dir to upload> -r <path on instance> -a <active shell>`
 
+![LaunchInstance](https://github.com/dankUndertone/Spot-Instance-AWS/blob/master/launch_instance.gif)
+
 ### Options
 
 `-n` <br>
