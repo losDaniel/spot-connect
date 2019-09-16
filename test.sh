@@ -1,4 +1,4 @@
 pwd
 ls
-cd ~/efs-mount-point
+cd ~/efs/data
 python analysis.py

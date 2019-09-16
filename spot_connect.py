@@ -184,13 +184,15 @@ def launch_spot_instance(spotid, profile, spot_wait_sleep=5, instance_wait_sleep
                 raise Exception('Spot Request Failed')
             if 'InstanceId' in spot_req:                                       # If an instance ID was returned with the spot request we exit the while loop 
                 instance_id = spot_req['InstanceId']
-            else: 
-                print('.')                                                     # Otherwise we continue to wait 
+            else:                                                              # Otherwise we continue to wait 
+                sys.stdout.write(".")
+                sys.stdout.flush()                                                   
                 time.sleep(spot_wait_sleep)
         else: 
             if attempt==0:
                 print('Launching...')
-            print('.')                                                         # If a new spot request was submitted it may take a moment to register
+            sys.stdout.write(".")
+            sys.stdout.flush()                                                 # If a new spot request was submitted it may take a moment to register
             time.sleep(spot_wait_sleep)                                        # Wait and attempt to connect again 
             attempt+=1 
 
@@ -205,7 +207,8 @@ def launch_spot_instance(spotid, profile, spot_wait_sleep=5, instance_wait_sleep
     attempt = 0 
     instance_up = False
     while not instance_up:
-        print('.')
+        sys.stdout.write(".")
+        sys.stdout.flush() 
         instance_status = client.describe_instance_status(InstanceIds=[instance_id])['InstanceStatuses'][0]['InstanceStatus']['Status']
         if instance_status!='initializing':
             instance_up=True        
@@ -247,7 +250,8 @@ def connect_to_instance(ip, keyfile, username='ec2-user', port=22, timeout=10):
             break
         except Exception as e:
             retries+=1 
-            print('.')
+            sys.stdout.write(".")
+            sys.stdout.flush() 
             if retries>=5: 
                 raise e  
     print('Connected')
@@ -326,7 +330,8 @@ def launch_efs(system_name, region='us-west-2', launch_wait=3):
                 file_system = client.describe_file_systems(CreationToken=system_name)['FileSystems'][0]
                 initiated=True
             except: 
-                print('.')
+                sys.stdout.write(".")
+                sys.stdout.flush() 
                 time.sleep(launch_wait)
         print('Detected')
     else: 
@@ -341,7 +346,8 @@ def launch_efs(system_name, region='us-west-2', launch_wait=3):
             available=True
             print('Available')
         else: 
-            print('.')
+            sys.stdout.write(".")
+            sys.stdout.flush() 
             time.sleep(launch_wait)
         
     return file_system 
@@ -390,7 +396,8 @@ def retrieve_efs_mount(file_system_name, instance, region='us-west-2', mount_wai
                 mount_target = client.describe_mount_targets(MountTargetId=response['MountTargetId'])['MountTargets'][0]
                 initiated = True 
             except: 
-                print('.')
+                sys.stdout.write(".")
+                sys.stdout.flush() 
                 time.sleep(mount_wait)
         print('Detected')
     else: 

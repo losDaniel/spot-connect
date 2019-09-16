@@ -21,6 +21,8 @@ To launch an instance open your command prompt and use the following commands
 
 ![LaunchInstance](https://github.com/dankUndertone/Spot-Instance-AWS/blob/master/launch_instance.gif)
 
+The command above creates an instance called "test" and since no filesystem name is specified it creates an efs by the same name. It mounts the efs to the instnace automatically and uploads one analysis script and one data file, then it runs the test script and leave an open shell for the user once everything is done.
+
 ### Options
 
 `-n` <br>
