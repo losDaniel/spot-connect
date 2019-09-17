@@ -21,7 +21,7 @@ To launch an instance open your command prompt and use the following commands
 
 ![LaunchInstance](https://github.com/dankUndertone/Spot-Instance-AWS/blob/master/launch_instance.gif)
 
-The command above creates an instance called "test" and since no filesystem name is specified it creates an efs by the same name. It mounts the efs to the instnace automatically and uploads one analysis script and one data file, then it runs the test script and leave an open shell for the user once everything is done.
+The command above creates an instance called "test" and since no filesystem name is specified it creates an efs by the same name. It mounts the efs to the instance automatically and uploads one analysis script and one data file, then it runs the test script and leave an open shell for the user once everything is done.
 
 ### Options
 
@@ -48,14 +48,14 @@ The command above creates an instance called "test" and since no filesystem name
 `-u` <br>
 *Upload* is the file path or directory that will be uploaded via paramiko ssh transfer. Files or folders are assumed to be in the current directory. Upload speed appears to depends only on internet speed and not instance type. To give an idea of upload speed, it took me under 8 minutes to upload a 150MB compressed file on a busy 5 GH wifi connection. **Syntax for upload files:**
 
-	`-u C:\Data\file.txt`  # uploading one file 
+	u C:\Data\file.txt  # uploading one file 
 <br>
-	`-u C:\Data\file_1.txt,C:\MapData\file_2.zip`  #uploading a list of files 
+	-u C:\Data\file_1.txt,C:\MapData\file_2.zip  #uploading a list of files 
 
 `-r` <br>
 *Remotepath* is the directory of the EC2 instance to upload the files in the `-u` (upload) option to. If the **remotepath** specified is in an EFS that has been mounted on the instance that data will persist in the EFS and be accessible to any other instance that is mounted on that EFS, even if the current instance is terminated. For more on this see the **Elastic File System** section below. **Syntax for remotepath:**
 
-	`-r efs/data`  # forward slash, this file will be placed in the home director. For example, in AWS Linux instance that is `home/ec2-user/`
+	-r efs/data  # forward slash, this file will be placed in the home director. For example, in AWS Linux instance that is `home/ec2-user/`
 
 `-a` <br>
 *Activepath* is a boolean (`True` or `False`) for whether to leave an active shell connected to the instance after the scripts have finished running (if your instance has a linux ami, for example, this will be a linux shell).
