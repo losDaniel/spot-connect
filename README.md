@@ -48,8 +48,7 @@ The command above creates an instance called "test" and since no filesystem name
 `-u` <br>
 *Upload* is the file path or directory that will be uploaded via paramiko ssh transfer. Files or folders are assumed to be in the current directory. Upload speed appears to depends only on internet speed and not instance type. To give an idea of upload speed, it took me under 8 minutes to upload a 150MB compressed file on a busy 5 GH wifi connection. **Syntax for upload files:**
 
-	u C:\Data\file.txt  # uploading one file 
-<br>
+	-u C:\Data\file.txt  # uploading one file 
 	-u C:\Data\file_1.txt,C:\MapData\file_2.zip  #uploading a list of files 
 
 `-r` <br>
