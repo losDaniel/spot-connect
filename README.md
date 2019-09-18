@@ -8,7 +8,8 @@ This repository hosts a module to make launching and executing python scripts on
 
 3) Connect to and interact with their spot instance by executing scripts or through an active prompt 
 
-For a walk through of how the this module does what it does see my Medium article, [Mastering the Spot Request - Deep Learning at a ](https://medium.com/swlh/mastering-the-aws-spot-instance-2ecf59e242fa)
+For a walk through of how the this module does what it does see my Medium article: 
+[Mastering the Spot Request - Deep Learning at a Discount](https://medium.com/swlh/mastering-the-aws-spot-instance-2ecf59e242fa)
 <br><br>
 ## Spot Connect 
 
