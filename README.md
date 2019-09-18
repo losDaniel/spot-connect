@@ -6,7 +6,9 @@ This repository hosts a module to make launching and executing python scripts on
 
 2) Easily upload or transfer small or large data amounts on and off their instances 
 
-3) Monitor the requisition status of their spot-instance, save work and resume work on a new spot-instance 
+3) Connect to and interact with their spot instance by executing scripts or through an active prompt 
+
+For a walk through of how the this module does what it does see my Medium article, [Mastering the Spot Request - Deep Learning at a ](https://medium.com/swlh/mastering-the-aws-spot-instance-2ecf59e242fa)
 <br><br>
 ## Spot Connect 
 
