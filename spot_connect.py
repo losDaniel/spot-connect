@@ -427,7 +427,7 @@ def printTotals(transferred, toBeTransferred):
 
 
 
-def upload_to_ec2(instance, user_name, files, remote_dir=b'.'):
+def upload_to_ec2(instance, user_name, files, remote_dir='.'):
     '''
     Upload files directly to an EC2 instance. This method can be slow. 
     __________
@@ -435,7 +435,7 @@ def upload_to_ec2(instance, user_name, files, remote_dir=b'.'):
     - instance : dict. Response dictionary from ec2 instance describe_instances method 
     - user_name : string. SSH username for accessing instance, default usernames for AWS images can be found at https://alestic.com/2014/01/ec2-ssh-username/
     - files : string or list of strings. single file, list of files or directory to upload. If it is a directory end in "/" 
-    - remote_dir : b'.'  string.The directory on the instance where the files will be uploaded to 
+    - remote_dir : '.'  string.The directory on the instance where the files will be uploaded to 
     '''
     print('Connecting...')
     client = connect_to_instance(instance['PublicIpAddress'],instance['KeyName'],username='ec2-user',port=22)
@@ -495,8 +495,9 @@ if __name__ == '__main__':                                                     #
     parser.add_argument('-s', '--script', help='Script path', action='append', default=[])
     parser.add_argument('-f', '--filesystem', help='Elastic File System name', default='')
     parser.add_argument('-u', '--upload', help='File or directory to upload', default='')
-    parser.add_argument('-r', '--remotepath', help='Directory on EC2 instance to upload via ordinary NFS', default=b'.')
+    parser.add_argument('-r', '--remotepath', help='Directory on EC2 instance to upload via ordinary NFS', default='.')
     parser.add_argument('-a', '--activeprompt', help='If "True" leave an active shell open after running scripts', default=False)
+    parser.add_argument('-t', '--terminate', help='Terminate a specific instance', default=False)
     args = parser.parse_args()
     
     profile = profiles[args.profile]
@@ -506,35 +507,40 @@ if __name__ == '__main__':                                                     #
     except Exception as e:
         raise e
         sys.exit(1)
-    
-    if profile['efs_mount']: 
-        print('Profile requesting EFS mount...')
-        if args.filesystem=='':                                                # If no filesystem name is submitted 
-            fs_name = args.name                                                # Retrieve or create a filesystem with the same name as the instance 
-        else: 
-            fs_name = args.filesystem                                          
-        try:                                                                   # Create and/or mount an EFS to the instance 
-            mount_target, instance_dns, filesystem_dns = retrieve_efs_mount(fs_name, instance)
-        except Exception as e: 
-            raise e 
-            sys.exit(1)        
-        print('Connecting to instance to link EFS...')
-        run_script(instance, profile['username'], 'efs_mount.sh')
-            
-    st = time.time() 
 
-    if args.upload!='':        
-        files_to_upload = [] 
-        for file in args.upload.split(','):
-            files_to_upload.append(os.path.abspath(file))
-        upload_to_ec2(instance, profile['username'], files_to_upload, remote_dir=args.remotepath)    
 
-    print('Time to Upload: %s' % str(time.time()-st))
+    if args.terminate:                                                         # If we want to terminate the instance 
+        terminate_instance(instance['InstanceId'])                             # termination overrrides everything else 
+        print('Script %s has been terminated' % str(args.name))
+    else: 
+        if profile['efs_mount']: 
+            print('Profile requesting EFS mount...')
+            if args.filesystem=='':                                            # If no filesystem name is submitted 
+                fs_name = args.name                                            # Retrieve or create a filesystem with the same name as the instance 
+            else: 
+                fs_name = args.filesystem                                          
+            try:                                                               # Create and/or mount an EFS to the instance 
+                mount_target, instance_dns, filesystem_dns = retrieve_efs_mount(fs_name, instance)
+            except Exception as e: 
+                raise e 
+                sys.exit(1)        
+            print('Connecting to instance to link EFS...')
+            run_script(instance, profile['username'], 'efs_mount.sh')
+                
+        st = time.time() 
     
-    for script in profile['scripts'] + args.script:
-        print('\nExecuting script "%s"...' % str(script))
-        if not run_script(instance, profile['username'], script):
-            break
+        if args.upload!='':        
+            files_to_upload = [] 
+            for file in args.upload.split(','):
+                files_to_upload.append(os.path.abspath(file))
+            upload_to_ec2(instance, profile['username'], files_to_upload, remote_dir=args.remotepath)    
     
-    if args.activeprompt:
-        active_shell(instance, profile['username'])
+        print('Time to Upload: %s' % str(time.time()-st))
+        
+        for script in profile['scripts'] + args.script:
+            print('\nExecuting script "%s"...' % str(script))
+            if not run_script(instance, profile['username'], script):
+                break
+        
+        if args.activeprompt:
+            active_shell(instance, profile['username'])

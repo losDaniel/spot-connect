@@ -62,6 +62,9 @@ The command above creates an instance called "test" and since no filesystem name
 `-a` <br>
 *Activepath* is a boolean (`True` or `False`) for whether to leave an active shell connected to the instance after the scripts have finished running (if your instance has a linux ami, for example, this will be a linux shell).
 
+`-t`<br>
+*Terminate* is a boolean. If "True" the instance specified in the `-n` (name) argument will be terminated and nothing else will be done (*Terminate* overrides all other arguments). 
+
 <br><br>
 ## Elastic File System 
 
