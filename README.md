@@ -94,3 +94,24 @@ This list will be updated as more profiles are added. To see the specific values
 
 `"gateway"` : (in progress) an instance that can be uses the AWS gateway AMI to provide a gateway for NFS ports that can be used in data transfers including datasync. 
 
+
+## Create Instance Profiles to Create Instances with specific IAM Roles & Access 
+
+```
+import boto3
+
+# Connect to the IAM client 
+iam_client = boto3.client('iam')
+
+# Create an instance profile
+iam_client.create_instance_profile(
+    InstanceProfileName = 'ec2_s3',
+)
+
+# Connect to the resource and the instance profile you've just created 
+iam_resource = boto3.resource('iam')
+instance_profile = iam_resource.InstanceProfile('ec2_s3')
+
+# Add the desired IAM role, this should have been created earlier in the AWS console
+instance_profile.add_role(RoleName='ec2_s3_access')
+```

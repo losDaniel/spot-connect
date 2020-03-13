@@ -30,12 +30,20 @@ except:
 import time, os, sys, interactive, ast
 
 
+def absoluteFilePaths(directory):
+    for dirpath,_,filenames in os.walk(directory):
+        for f in filenames:
+            yield os.path.abspath(os.path.join(dirpath, f))
+
 def load_profiles():
-    with open('profiles.txt','r') as f:
+
+    profile = [f for f in list(absoluteFilePaths(os.getcwd())) if f.split('\\')[-1]=='profiles.txt'][0]    
+    
+    with open(profile,'r') as f:
         profiles = ast.literal_eval(f.read())
     return profiles
 
-def launch_spot_instance(spotid, profile, monitoring=True, spot_wait_sleep=5, instance_wait_sleep=5, key_pair_dir=os.getcwd(), enable_nfs=True, enable_ds=True):
+def launch_spot_instance(spotid, profile, instance_profile='', monitoring=True, spot_wait_sleep=5, instance_wait_sleep=5, kp_dir=os.getcwd(), enable_nfs=True, enable_ds=True):
     '''
     Launch a spot instance using the preconfigured aws account on boto3. Returns instance ID. 
     __________
@@ -46,6 +54,7 @@ def launch_spot_instance(spotid, profile, monitoring=True, spot_wait_sleep=5, in
         > instance_type : get a list of instance types and prices at https://aws.amazon.com/ec2/spot/pricing/ 
         > price : the maximum price to bid for a spot instance: get a list of prices at https://aws.amazon.com/ec2/spot/pricing/ 
         > region : the region to access
+    - instance_profile : str. allows the user to submit an instance profile with attached IAM role specifications 
     - spot_wait_sleep : how much time to wait between each probe of whether the spot request has been placed 
     - instance_wait_sleep : how much time to wait between each probe of whether the spot request has been filled
     - key_pair_dir : string. directory to store the private key files
@@ -59,7 +68,7 @@ def launch_spot_instance(spotid, profile, monitoring=True, spot_wait_sleep=5, in
         profile['key_pair']=('KP-'+spotid,'KP-'+spotid+'.pem')                 # Log a keypair in the profile dictionary 
     try: 
         keypair = client.create_key_pair(KeyName=profile['key_pair'][0])       # Create a key pair on AWS
-        with open(key_pair_dir+'/'+profile['key_pair'][1], 'w') as file:       # Download the private key into the CW
+        with open(kp_dir+'/'+profile['key_pair'][1], 'w') as file:       # Download the private key into the CW
             file.write(keypair['KeyMaterial'])
             file.close()
         print('Key pair created...')
@@ -155,6 +164,9 @@ def launch_spot_instance(spotid, profile, monitoring=True, spot_wait_sleep=5, in
                 'InstanceType': profile['instance_type'],                      # Instance type. List available programatically or through wizard or at https://aws.amazon.com/ec2/spot/pricing/ 
                 'KeyName': profile['key_pair'][0],                             # Name for the key pair
                 'Monitoring' : {'Enabled': monitoring},                        # Enable monitoring
+                'IamInstanceProfile' : {                                       # Define the IAM role for your instance 
+                        'Name': instance_profile,                                       
+                },
             },
             SpotPrice=profile['price'],                                        # Must be greater than current instance type price for region, available at https://aws.amazon.com/ec2/spot/pricing/ 
             Type='one-time',                                                   # Persisitence is usually not necessary (given storage backup) or advisable with spot instances 
@@ -195,8 +207,8 @@ def launch_spot_instance(spotid, profile, monitoring=True, spot_wait_sleep=5, in
         reservations = client.describe_instances(InstanceIds=[instance_id])['Reservations']
         instance = reservations[0]['Instances'][0]                             
     except Exception as e: 
-        raise Exception('Request not submitted')
-
+        raise e 
+        
     print('Got instance: '+str(instance['InstanceId'])+'['+str(instance['State']['Name'])+']')
     sys.stdout.flush() 
     attempt = 0 
@@ -256,7 +268,7 @@ def connect_to_instance(ip, keyfile, username='ec2-user', port=22, timeout=10):
 
 
 
-def run_script(instance, user_name, script, cmd=False, port=22):
+def run_script(instance, user_name, script, cmd=False, port=22, kp_dir=os.getcwd()):
     '''
     Run a script on the the given instance 
     __________
@@ -272,7 +284,7 @@ def run_script(instance, user_name, script, cmd=False, port=22):
     else:   
         commands = open(script, 'r').read().replace('\r', '')
     
-    client = connect_to_instance(instance['PublicIpAddress'],instance['KeyName'],username=user_name,port=port)
+    client = connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username=user_name,port=port)
     session = client.get_transport().open_session()
     session.set_combine_stderr(True)                                           # Combine the error message and output message channels
 
@@ -288,7 +300,7 @@ def run_script(instance, user_name, script, cmd=False, port=22):
     return True
 
 
-def active_shell(instance, user_name, port=22): 
+def active_shell(instance, user_name, port=22, kp_dir=os.getcwd()): 
     '''
     Leave a shell active
     __________
@@ -298,7 +310,7 @@ def active_shell(instance, user_name, port=22):
     - port : port to use to connect to the instance 
     '''    
     
-    client = connect_to_instance(instance['PublicIpAddress'],instance['KeyName'],username=user_name,port=port)
+    client = connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username=user_name,port=port)
     console = client.invoke_shell()                                            
     console.keep_this = client                                                
     session = console.get_transport().open_session()
@@ -430,7 +442,7 @@ def printTotals(transferred, toBeTransferred):
 
 
 
-def upload_to_ec2(instance, user_name, files, remote_dir='.'):
+def upload_to_ec2(instance, user_name, files, remote_dir='.', kp_dir=os.getcwd()):
     '''
     Upload files directly to an EC2 instance. Speed depends on internet connection and not instance type. 
     __________
@@ -440,7 +452,7 @@ def upload_to_ec2(instance, user_name, files, remote_dir='.'):
     - files : string or list of strings. single file, list of files or directory to upload. If it is a directory end in "/" 
     - remote_dir : '.'  string.The directory on the instance where the files will be uploaded to 
     '''
-    client = connect_to_instance(instance['PublicIpAddress'],instance['KeyName'],username='ec2-user',port=22)
+    client = connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username='ec2-user',port=22)
     print('Connected. Uploading files...')
     stfp = client.open_sftp()
     try: 
@@ -453,7 +465,7 @@ def upload_to_ec2(instance, user_name, files, remote_dir='.'):
     return True 
     
 
-def download_from_ec2(instance, username, get, put='.'):
+def download_from_ec2(instance, username, get, put='.', kp_dir=os.getcwd()):
     '''
     Download files directly from an EC2 instance. Speed depends on internet connection and not instance type. 
     __________
@@ -464,7 +476,7 @@ def download_from_ec2(instance, username, get, put='.'):
     - put : str or list of str. Folder to place the files in `get` 
     '''
     client = boto3.client('ec2', region_name='us-west-2')
-    client = connect_to_instance(instance['PublicIpAddress'],instance['KeyName'],username=username,port=22)
+    client = connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username=username,port=22)
 
     stfp = client.open_sftp()
 

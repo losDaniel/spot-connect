@@ -43,6 +43,7 @@ if __name__ == '__main__':                                                     #
     parser.add_argument('-t', '--terminate', help='Terminate the instance after running everything', default=False)
     parser.add_argument('-nm', '--newmount', help='Create a new mount target even if one exists', default=False)
     parser.add_argument('-m', '--monitoring', help='Activate monitoring for the instance', default=True)
+    parser.add_argument('-ip', '--instanceprofile', help='Instance profile with attached IAM roles', default='')
     args = parser.parse_args()
     
     profile = profiles[args.profile]
@@ -52,7 +53,7 @@ if __name__ == '__main__':                                                     #
     print('#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#', flush=True)
     print('', flush=True)
     try:                                                   
-        instance, profile = spt.launch_spot_instance(args.name, profile, args.monitoring)  # Launch or connect to the spot instance under the given name 
+        instance, profile = spt.launch_spot_instance(args.name, profile, instance_profile=args.instanceprofile, monitoring=args.monitoring)  # Launch or connect to the spot instance under the given name 
     except Exception as e:
         raise e
         sys.exit(1)
