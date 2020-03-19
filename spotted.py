@@ -1,16 +1,32 @@
-# -*- coding: utf-8 -*-
 """
-Created on Tue Oct  1 12:56:39 2019
+Author: Carlos Valcarcel <carlos.d.valcarcel.w@gmail.com>
 
-@author: carlo
+This file is part of spot_aws 
+
+Spotted module for spot aws 
+
+This file defines the spotted class which can be used to launch and operate 
+spot instances from python scripts or notebooks. 
+
+MIT License
 """
-import spot_toolbox as spt
+
 import sys, time, os, copy
+from path import Path
+
+root = Path(os.path.dirname(os.path.abspath(__file__)))
+
+sys.path.insert(0, root+'/toolbox')
+
+import spot_utils
+import spot_instances
+import instance_functions
+import elastic_file_systems
 
 
 class spotted: 
     
-    profiles=spt.load_profiles()         
+    profiles=spot_utils.load_profiles()         
 
     name = None 
     price = None 
@@ -71,21 +87,23 @@ class spotted:
         self.name = name 
         
         self.profile = None         
-                
         if profile is None: 
             self.profile=copy.deepcopy(spotted.profiles['default'])            # create a deep copy so that the class dictionary doesn't get modified  
         else: 
             self.profile=copy.deepcopy(spotted.profiles[profile])
+        
         self.monitoring = None 
         if monitoring is None: 
             self.monitoring=True
         else: 
             self.monitoring=monitoring
+        
         self.filesystem = None 
         if filesystem is None: 
             self.filesystem=''
         else:
             self.filesystem=filesystem
+        
         self.newmount = None 
         if newmount is None:   
             self.newmount=False
@@ -95,32 +113,41 @@ class spotted:
         self.efs_mount = None 
         if efs_mount is not None: 
             self.profile['efs_mount']=efs_mount
+        
         self.firewall = None 
         if firewall is not None:
             self.profile['firewall']=firewall
+        
         self.image_id = None 
         if image_id is not None:
             self.profile['image_id']=image_id
+        
         self.instance_type = None 
         if instance_type is not None:
             self.profile['instance_type']=instance_type
+        
         self.price = None 
         if price is not None:
             self.profile['price']=price
+        
         self.region = None 
         if region is not None:
             self.profile['region']=region
+        
         self.username = None 
         if username is not None:
             self.profile['username']=username
+        
         self.key_pair = None 
         if key_pair is not None:
             self.profile['key_pair']=key_pair
+        
         self.kp_dir = None 
         if kp_dir is not None: 
             self.kp_dir = kp_dir
         else: 
             self.kp_dir = os.getcwd()
+        
         self.sec_group = None 
         if sec_group is not None:
             self.profile['security_group']=sec_group       
@@ -140,7 +167,7 @@ class spotted:
 
         try:                                     # Launch or connect to the spot instance under the given name
             # Returns the profile with any parameters that needed to be added automatically in order to connect (Key Pair and Security Group)                                                                 
-            self.instance, self.filled_profile = spt.launch_spot_instance(self.name, self.profile, instance_profile=self.instance_profile, monitoring=self.monitoring, kp_dir=self.kp_dir)   
+            self.instance, self.filled_profile = spot_instances.launch_spot_instance(self.name, self.profile, instance_profile=self.instance_profile, monitoring=self.monitoring, kp_dir=self.kp_dir)   
         except Exception as e:
             raise e
             sys.exit(1)
@@ -157,17 +184,18 @@ class spotted:
             
             # Create and/or mount an EFS to the instance 
             try:                                
-                self.mount_target, self.instance_dns, self.filesystem_dns = spt.retrieve_efs_mount(fs_name, self.instance, new_mount=self.newmount)
+                self.mount_target, self.instance_dns, self.filesystem_dns = elastic_file_systems.retrieve_efs_mount(fs_name, self.instance, new_mount=self.newmount)
             except Exception as e: 
                 raise e 
                 sys.exit(1)        
                 
             print('Connecting to instance to link EFS...')
-            spt.run_script(self.instance, self.profile['username'], 'efs_mount.sh', kp_dir=self.kp_dir)
+            instance_functions.run_script(self.instance, self.profile['username'], elastic_file_systems.compose_mount_script(self.filesystem_dns), kp_dir=self.kp_dir, cmd=True)
             
         if len(self.profile['scripts'])>0:
-            spt.run_script(self.instance, self.profile['username'], self.profile['scripts'], kp_dir=self.kp_dir)
+            instance_functions.run_script(self.instance, self.profile['username'], self.profile['scripts'], kp_dir=self.kp_dir)
     
+
     def upload(self, files, remotepath):
         '''
         Upload a file or list of files to the instance. If an EFS is connected to the instance files can be uploaded to the EFS through the instance. 
@@ -186,9 +214,10 @@ class spotted:
         files_to_upload = [] 
         for file in files:
             files_to_upload.append(os.path.abspath(file))
-        spt.upload_to_ec2(self.instance, self.profile['username'], files_to_upload, remote_dir=remotepath, kp_dir=self.kp_dir)    
+        instance_functions.upload_to_ec2(self.instance, self.profile['username'], files_to_upload, remote_dir=remotepath, kp_dir=self.kp_dir)    
     
         print('Time to Upload: %s' % str(time.time()-st))
+        
         
     def download(self, files, localpath):
         '''
@@ -200,12 +229,16 @@ class spotted:
         '''
         if type(files)==str: 
             files = [files]
+            
         elif type(files)!=list: 
             raise TypeError('get must be str or list of str')
+
         if type(localpath) is str: 
             localpath = [localpath]*len(files)
+
         elif type(localpath)==list: 
             assert(len(localpath)==len(files))
+
         else: 
             raise TypeError('put must be str or list of str with equal length to `get`')
 
@@ -214,9 +247,10 @@ class spotted:
         files_to_download = [] 
         for file in files:
             files_to_download.append(file)
-        spt.download_from_ec2(self.instance, self.profile['username'], files_to_download, put=localpath, kp_dir=self.kp_dir)
+        instance_functions.download_from_ec2(self.instance, self.profile['username'], files_to_download, put=localpath, kp_dir=self.kp_dir)
     
         print('Time to Download: %s' % str(time.time()-st))
+
 
     def run(self, scripts, cmd=False):
         '''
@@ -237,7 +271,7 @@ class spotted:
             if not cmd:
                 print('\nExecuting script "%s"...' % str(script))
             try:
-                if not spt.run_script(self.instance, self.profile['username'], script, cmd=cmd, kp_dir=self.kp_dir):
+                if not instance_functions.run_script(self.instance, self.profile['username'], script, cmd=cmd, kp_dir=self.kp_dir):
                     break
             except Exception as e: 
                 print(str(e))
@@ -245,10 +279,12 @@ class spotted:
     
         print('Time to Run Scripts: %s' % str(time.time()-st))
 
+
     def open_shell(self, port=22):
         '''Open an active shell. --Only works when run from the command prompt--'''
-        spt.active_shell(self.instance, self.profile['username'], kp_dir=self.kp_dir)
+        instance_functions.active_shell(self.instance, self.profile['username'], kp_dir=self.kp_dir)
     
+
     def terminate(self): 
         '''Terminate the instance'''
-        spt.terminate_instance(self.instance['InstanceId'])                    
+        instance_functions.terminate_instance(self.instance['InstanceId'])                    

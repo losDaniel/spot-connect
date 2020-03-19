@@ -1,4 +1,9 @@
+
 """
+Author: Carlos Valcarcel <carlos.d.valcarcel.w@gmail.com>
+
+This file is part of spot_aws 
+
 Launch and connect to spot instances
 
 Examples: 
@@ -25,12 +30,21 @@ References:
 MIT License
 """
 
-import spot_toolbox as spt
+from path import Path 
 import argparse, sys, time, os
+
+root = Path(os.path.dirname(os.path.abspath(__file__)))
+
+sys.path.insert(0, root+'/toolbox')
+
+import spot_utils
+import spot_instances
+import instance_functions
+import elastic_file_systems
 
 if __name__ == '__main__':                                                     # Main execution 
     
-    profiles=spt.load_profiles()         
+    profiles=spot_utils.load_profiles()         
 
     parser = argparse.ArgumentParser(description='Launch spot instance')
     parser.add_argument('-n', '--name', help='Name of the spot instance', required=True)
@@ -42,35 +56,43 @@ if __name__ == '__main__':                                                     #
     parser.add_argument('-a', '--activeprompt', help='If "True" leave an active shell open after running scripts', default=False)
     parser.add_argument('-t', '--terminate', help='Terminate the instance after running everything', default=False)
     parser.add_argument('-m', '--monitoring', help='Activate monitoring for the instance', default=True)
-    parser.add_argument('-nm', '--newmount', help='Create a new mount target even if one exists', default=False)
-    parser.add_argument('-ip', '--instanceprofile', help='Instance profile with attached IAM roles', default='')
+    parser.add_argument('-nm','--newmount', help='Create a new mount target even if one exists', default=False)
+    parser.add_argument('-ip','--instanceprofile', help='Instance profile with attached IAM roles', default='')
     args = parser.parse_args()
     
     profile = profiles[args.profile]
     print('', flush=True)
     print('#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#', flush=True)
     print('#~#~#~#~#~#~#~# Launching '+args.name, flush=True)
-    print('#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#', flush=True)
+    print('#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#', flush=True)
     print('', flush=True)
+    
+    
+    # Launch the instance using the name profile, instance profile and monitoring arguments     
     try:                                                   
-        instance, profile = spt.launch_spot_instance(args.name, profile, instance_profile=args.instanceprofile, monitoring=args.monitoring)  # Launch or connect to the spot instance under the given name 
+        instance, profile = spot_instances.launch_spot_instance(args.name, profile, instance_profile=args.instanceprofile, monitoring=args.monitoring)  # Launch or connect to the spot instance under the given name 
     except Exception as e:
         raise e
         sys.exit(1)
 
     if profile['efs_mount']: 
         print('Profile requesting EFS mount...')
-        if args.filesystem=='':                                            # If no filesystem name is submitted 
-            fs_name = args.name                                            # Retrieve or create a filesystem with the same name as the instance 
+        
+        # If no filesystem name is submitted then do not attach a file system 
+        if args.filesystem=='':                                                
+            pass
+
+        # Otherwise create the file system and attach an efs mount. 
         else: 
             fs_name = args.filesystem                                          
-        try:                                                               # Create and/or mount an EFS to the instance 
-            mount_target, instance_dns, filesystem_dns = spt.retrieve_efs_mount(fs_name, instance, new_mount=args.newmount)
-        except Exception as e: 
-            raise e 
-            sys.exit(1)        
-        print('Connecting to instance to link EFS...')
-        spt.run_script(instance, profile['username'], 'efs_mount.sh')
+
+            try:                                                               # Create and/or mount an EFS to the instance 
+                mount_target, instance_dns, filesystem_dns = elastic_file_systems.retrieve_efs_mount(fs_name, instance, new_mount=args.newmount)
+            except Exception as e: 
+                raise e 
+                sys.exit(1)        
+            print('Connecting to instance to link EFS...')
+            instance_functions.run_script(instance, profile['username'], elastic_file_systems.compose_mount_script(filesystem_dns), cmd=True)
             
     st = time.time() 
 
@@ -78,7 +100,7 @@ if __name__ == '__main__':                                                     #
         files_to_upload = [] 
         for file in args.upload.split(','):
             files_to_upload.append(os.path.abspath(file))
-        spt.upload_to_ec2(instance, profile['username'], files_to_upload, remote_dir=args.remotepath)    
+        instance_functions.upload_to_ec2(instance, profile['username'], files_to_upload, remote_dir=args.remotepath)    
 
     print('Time to Upload: %s' % str(time.time()-st))
 
@@ -92,7 +114,7 @@ if __name__ == '__main__':                                                     #
     for script in profile['scripts'] + scripts_to_run:
         print('\nExecuting script "%s"...' % str(script))
         try:
-            if not spt.run_script(instance, profile['username'], script):
+            if not instance_functions.run_script(instance, profile['username'], script):
                 break
         except Exception as e: 
             print(str(e))
@@ -101,8 +123,8 @@ if __name__ == '__main__':                                                     #
     print('Time to Run Scripts: %s' % str(time.time()-st))
     
     if args.activeprompt:
-        spt.active_shell(instance, profile['username'])
+        instance_functions.active_shell(instance, profile['username'])
 
     if args.terminate:                                                         # If we want to terminate the instance 
-        spt.terminate_instance(instance['InstanceId'])                             # termination overrrides everything else 
+        instance_functions.terminate_instance(instance['InstanceId'])                             # termination overrrides everything else 
         print('Script %s has been terminated' % str(args.name))
