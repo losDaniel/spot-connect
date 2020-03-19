@@ -41,8 +41,8 @@ if __name__ == '__main__':                                                     #
     parser.add_argument('-r', '--remotepath', help='Directory on EC2 instance to upload via ordinary NFS', default='.')
     parser.add_argument('-a', '--activeprompt', help='If "True" leave an active shell open after running scripts', default=False)
     parser.add_argument('-t', '--terminate', help='Terminate the instance after running everything', default=False)
-    parser.add_argument('-nm', '--newmount', help='Create a new mount target even if one exists', default=False)
     parser.add_argument('-m', '--monitoring', help='Activate monitoring for the instance', default=True)
+    parser.add_argument('-nm', '--newmount', help='Create a new mount target even if one exists', default=False)
     parser.add_argument('-ip', '--instanceprofile', help='Instance profile with attached IAM roles', default='')
     args = parser.parse_args()
     

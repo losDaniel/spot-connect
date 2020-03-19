@@ -51,7 +51,6 @@ def absolute_file_paths(directory):
             yield os.path.abspath(os.path.join(dirpath, f))
 
 
-
 def populate_S3(bucket_name, region, files_to_upload):
     '''
     Upload files to the given bucket in the given region. If bucket does not exist, create it
@@ -71,13 +70,6 @@ def populate_S3(bucket_name, region, files_to_upload):
     # upload local files to s3
     s3 = boto3.client('s3')
     
-    progress = 0 
-    for file in files_to_upload: 
-        s3.upload_file(file, bucket_name, file.split('\\')[-1])
-        progress += 1
-        print('Uploading %.0f%% Complete' % float(100*(progress/len(files_to_upload))))
-
-
 
 if __name__ == '__main__':   
     
