@@ -1,30 +1,20 @@
 """
 Author: Carlos Valcarcel <carlos.d.valcarcel.w@gmail.com>
 
-This file is part of spot_aws 
+This file is part of spot-connect
 
 Toolbox for launching an AWS spot instance: 
 
-This script consists mainly of the boto3 functions that are used to request, 
+This package consists mainly of the boto3 functions that are used to request, 
 launch and interact with a spot instance. These functions are used in the 
 spot_connect.py script which can be launched from the command line or the 
 spotted class which can be run from a notebook or python script
 
-MIT License
+MIT License 2020
 """
 
-import pip._internal
-
-try:
-    import boto3
-except:
-    pip._internal.main(['install', 'boto3'])
-    import boto3    
-try:
-    from netaddr import IPNetwork
-except:
-    pip._internal.main(['install', 'netaddr'])
-    from netaddr import IPNetwork   
+import boto3
+from netaddr import IPNetwork
 
 import sys, time
 

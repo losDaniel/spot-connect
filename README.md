@@ -1,4 +1,4 @@
-# Spot Instance AWS
+# spot-connect
 
 This repository hosts a module to make launching and executing python scripts on AWS cheap and easy. Spot instances are excess capacity that AWS rents out at a discount through a bidding mechanism. Users can set a maximum price to bid on any excess capacity of any type of hardware loaded with any type of instance. Because spot instances rely on excess capacity they can be requisitioned by Amazon when demand increases, this gives users a 2 minute window to close their session and abandon the spot instance, forcing any unfinished work to resume on another spot instance should that be the user's choice. This module provides users the ability to: 
 

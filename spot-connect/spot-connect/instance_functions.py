@@ -1,20 +1,22 @@
 """
 Author: Carlos Valcarcel <carlos.d.valcarcel.w@gmail.com>
 
-This file is part of spot_aws 
+This file is part of spot-connect
 
 Toolbox for launching an AWS spot instance: 
 
-This script consists mainly of the boto3 functions that are used to request, 
+This package consists mainly of the boto3 functions that are used to request, 
 launch and interact with a spot instance. These functions are used in the 
 spot_connect.py script which can be launched from the command line or the 
 spotted class which can be run from a notebook or python script
 
-MIT License
+MIT License 2020
 """
 
-import sys, os, spot_instances, spot_utils, interactive, boto3 
-
+import sys, os
+import spot_instances
+import spot_utils
+import interactive, boto3 
 
 def run_script(instance, user_name, script, cmd=False, port=22, kp_dir=os.getcwd()):
     '''

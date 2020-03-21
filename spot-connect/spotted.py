@@ -1,14 +1,14 @@
 """
 Author: Carlos Valcarcel <carlos.d.valcarcel.w@gmail.com>
 
-This file is part of spot_aws 
+This file is part of spot-connect
 
-Spotted module for spot aws 
+Spotted module: 
 
-This file defines the spotted class which can be used to launch and operate 
-spot instances from python scripts or notebooks. 
+The spotted class can implement all the functionality of spot_connect.py 
+but it can be run from a notebook or python script.
 
-MIT License
+MIT License 2020
 """
 
 import sys, time, os, copy
@@ -16,13 +16,7 @@ from path import Path
 
 root = Path(os.path.dirname(os.path.abspath(__file__)))
 
-sys.path.insert(0, root+'/toolbox')
-
-import spot_utils
-import spot_instances
-import instance_functions
-import elastic_file_systems
-
+from toolbox import spot_utils, spot_instances, instance_functions, elastic_file_systems
 
 class spotted: 
     
