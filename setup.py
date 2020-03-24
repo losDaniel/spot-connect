@@ -8,7 +8,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup( 
 	name='spot-connect',
-	version='1.0.0a1',
+	version='1.0.0a2',
 	description='A package to create and manage AWS resources, centered around EC2 spot-instances',
 	long_description=long_description,
 	long_description_content_type='text/markdown',
@@ -17,10 +17,9 @@ setup(
 	author_email='carlos.d.valcarcel.w@gmail.com',
 	license='MIT',
 	keywords='aws ec2 cloud ssh machinelearning virtualmachine',
-	package_dir={'':'spot_connect'},
-	data_files=[('spot_connect', 'profiles.txt'),
-	            ('spot_connect', 'key_pair_default_dir.txt')],
 	packages=find_packages(where='spot_connect'),
 	install_requires=['boto3','netaddr','paramiko',],
 	python_requires='>=3.7',
+	package_data={'kp_dir'  :['key_pair_default_dir.txt'],
+	              'profiles':['profiles.txt']}
 )

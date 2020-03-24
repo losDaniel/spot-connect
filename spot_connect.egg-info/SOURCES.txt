@@ -1,0 +1,7 @@
+README.md
+setup.py
+spot_connect.egg-info/PKG-INFO
+spot_connect.egg-info/SOURCES.txt
+spot_connect.egg-info/dependency_links.txt
+spot_connect.egg-info/requires.txt
+spot_connect.egg-info/top_level.txt

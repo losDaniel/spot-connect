@@ -16,7 +16,7 @@ from path import Path
 
 root = Path(os.path.dirname(os.path.abspath(__file__)))
 
-from toolbox import spot_utils, spot_instances, instance_functions, elastic_file_systems
+import spot_utils, spot_instances, instance_functions, elastic_file_systems
 
 class spotted: 
     

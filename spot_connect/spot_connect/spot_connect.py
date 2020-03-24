@@ -35,7 +35,7 @@ import argparse, sys, time, os
 
 root = Path(os.path.dirname(os.path.abspath(__file__)))
 
-from toolbox import spot_utils, spot_instances, instance_functions, elastic_file_systems
+import spot_utils, spot_instances, instance_functions, elastic_file_systems
 
 if __name__ == '__main__':                                                     # Main execution 
     
