@@ -1,0 +1,2 @@
+include spot_connect/key_pair_default_dir.txt
+include spot_connect/profiles.txt

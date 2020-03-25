@@ -4,6 +4,8 @@ spot_connect/__init__.py
 spot_connect/elastic_file_systems.py
 spot_connect/instance_functions.py
 spot_connect/interactive.py
+spot_connect/key_pair_default_dir.txt
+spot_connect/profiles.txt
 spot_connect/spot_connect.py
 spot_connect/spot_instances.py
 spot_connect/spot_utils.py
