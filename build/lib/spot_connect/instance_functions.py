@@ -13,10 +13,8 @@ spotted class which can be run from a notebook or python script
 MIT License 2020
 """
 
-import sys, os
-import spot_instances
-import spot_utils
-import interactive, boto3 
+import sys, os, boto3 
+from spot_connect import spot_instances, spot_utils, interactive
 
 def run_script(instance, user_name, script, cmd=False, port=22, kp_dir=os.getcwd()):
     '''
