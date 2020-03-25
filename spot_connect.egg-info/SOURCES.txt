@@ -1,5 +1,13 @@
 README.md
 setup.py
+spot_connect/__init__.py
+spot_connect/elastic_file_systems.py
+spot_connect/instance_functions.py
+spot_connect/interactive.py
+spot_connect/spot_connect.py
+spot_connect/spot_instances.py
+spot_connect/spot_utils.py
+spot_connect/spotted.py
 spot_connect.egg-info/PKG-INFO
 spot_connect.egg-info/SOURCES.txt
 spot_connect.egg-info/dependency_links.txt

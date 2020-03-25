@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: spot-connect
-Version: 1.0.0a1
+Version: 1.0.0a2
 Summary: A package to create and manage AWS resources, centered around EC2 spot-instances
 Home-page: https://github.com/losDaniel/spot-connect.git
 Author: Carlos Valcarcel
