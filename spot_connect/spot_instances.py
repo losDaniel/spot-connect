@@ -13,11 +13,9 @@ spotted class which can be run from a notebook or python script
 MIT License 2020
 """
 
-import boto3
-import paramiko
-import spot_utils 
-import time
-import sys 
+import boto3, paramiko, time, sys 
+
+from spot_connect import spot_utils 
 
 key_pair_directory = spot_utils.get_default_kp_dir()
 
