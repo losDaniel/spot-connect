@@ -20,7 +20,7 @@ from spot_connect import utils, instances, methods, elastic_file_systems
 
 class SpotInstance: 
     
-    profiles=spot_utils.load_profiles()         
+    profiles=utils.load_profiles()         
 
     name = None 
     price = None 
@@ -85,6 +85,23 @@ class SpotInstance:
             self.profile=copy.deepcopy(spotted.profiles['default'])            # create a deep copy so that the class dictionary doesn't get modified  
         else: 
             self.profile=copy.deepcopy(spotted.profiles[profile])
+
+        # Set directory in which to save the key-pairs
+        self.kp_dir = None 
+        if kp_dir is not None: 
+            self.kp_dir = kp_dir
+        else: 
+            try: 
+                kp_dir = sutils.get_package_kp_dir() 
+                if kp_dir =='': 
+                    raise Exception   
+                print('Default key-pair directory is "%s"' % kp_dir)
+                self.kp_dir = kp_dir
+            except: 
+                kp_dir = input('Please select a default directory in which to save your key-pairs: ')
+                sutils.set_default_kp_dir(kp_dir)
+                print('You can change the default key-pair directory using spot_connect.sutils.set_default_kp_dir(<dir>)' % kp_dir)
+                self.kp_dir = kp_dir
         
         self.monitoring = None 
         if monitoring is None: 
@@ -135,13 +152,7 @@ class SpotInstance:
         self.key_pair = None 
         if key_pair is not None:
             self.profile['key_pair']=key_pair
-        
-        self.kp_dir = None 
-        if kp_dir is not None: 
-            self.kp_dir = kp_dir
-        else: 
-            self.kp_dir = root
-        
+            
         self.sec_group = None 
         if sec_group is not None:
             self.profile['security_group']=sec_group       
@@ -161,7 +172,7 @@ class SpotInstance:
 
         try:                                     # Launch or connect to the spot instance under the given name
             # Returns the profile with any parameters that needed to be added automatically in order to connect (Key Pair and Security Group)                                                                 
-            self.instance, self.filled_profile = spot_instances.launch_spot_instance(self.name, self.profile, instance_profile=self.instance_profile, monitoring=self.monitoring, kp_dir=self.kp_dir)   
+            self.instance, self.filled_profile = instances.launch_spot_instance(self.name, self.profile, instance_profile=self.instance_profile, monitoring=self.monitoring, kp_dir=self.kp_dir)   
         except Exception as e:
             raise e
             sys.exit(1)
@@ -184,10 +195,10 @@ class SpotInstance:
                 sys.exit(1)        
                 
             print('Connecting to instance to link EFS...')
-            instance_functions.run_script(self.instance, self.profile['username'], elastic_file_systems.compose_mount_script(self.filesystem_dns), kp_dir=self.kp_dir, cmd=True)
+            methods.run_script(self.instance, self.profile['username'], elastic_file_systems.compose_mount_script(self.filesystem_dns), kp_dir=self.kp_dir, cmd=True)
             
         if len(self.profile['scripts'])>0:
-            instance_functions.run_script(self.instance, self.profile['username'], self.profile['scripts'], kp_dir=self.kp_dir)
+            methods.run_script(self.instance, self.profile['username'], self.profile['scripts'], kp_dir=self.kp_dir)
     
 
     def upload(self, files, remotepath):
@@ -208,7 +219,7 @@ class SpotInstance:
         files_to_upload = [] 
         for file in files:
             files_to_upload.append(os.path.abspath(file))
-        instance_functions.upload_to_ec2(self.instance, self.profile['username'], files_to_upload, remote_dir=remotepath, kp_dir=self.kp_dir)    
+        methods.upload_to_ec2(self.instance, self.profile['username'], files_to_upload, remote_dir=remotepath, kp_dir=self.kp_dir)    
     
         print('Time to Upload: %s' % str(time.time()-st))
         
@@ -241,7 +252,7 @@ class SpotInstance:
         files_to_download = [] 
         for file in files:
             files_to_download.append(file)
-        instance_functions.download_from_ec2(self.instance, self.profile['username'], files_to_download, put=localpath, kp_dir=self.kp_dir)
+        methods.download_from_ec2(self.instance, self.profile['username'], files_to_download, put=localpath, kp_dir=self.kp_dir)
     
         print('Time to Download: %s' % str(time.time()-st))
 
@@ -265,7 +276,7 @@ class SpotInstance:
             if not cmd:
                 print('\nExecuting script "%s"...' % str(script))
             try:
-                if not instance_functions.run_script(self.instance, self.profile['username'], script, cmd=cmd, kp_dir=self.kp_dir):
+                if not methods.run_script(self.instance, self.profile['username'], script, cmd=cmd, kp_dir=self.kp_dir):
                     break
             except Exception as e: 
                 print(str(e))
@@ -276,9 +287,9 @@ class SpotInstance:
 
     def open_shell(self, port=22):
         '''Open an active shell. --Only works when run from the command prompt--'''
-        instance_functions.active_shell(self.instance, self.profile['username'], kp_dir=self.kp_dir)
+        methods.active_shell(self.instance, self.profile['username'], kp_dir=self.kp_dir)
     
 
     def terminate(self): 
         '''Terminate the instance'''
-        instance_functions.terminate_instance(self.instance['InstanceId'])                    
+        methods.terminate_instance(self.instance['InstanceId'])                    

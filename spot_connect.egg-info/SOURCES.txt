@@ -10,7 +10,7 @@ spot_connect/key_pair_default_dir.txt
 spot_connect/methods.py
 spot_connect/profiles.txt
 spot_connect/spotted.py
-spot_connect/utils.py
+spot_connect/sutils.py
 spot_connect.egg-info/PKG-INFO
 spot_connect.egg-info/SOURCES.txt
 spot_connect.egg-info/dependency_links.txt

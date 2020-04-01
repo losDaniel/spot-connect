@@ -52,7 +52,7 @@ def printTotals(transferred, toBeTransferred):
 
 def get_package_kp_dir():
     '''Get the key-pair directory'''
-    kpfile = [f for f in list(absoluteFilePaths(pull_root())) if f.split('\\')[-1]=='profiles.txt'][0]    
+    kpfile = [f for f in list(absoluteFilePaths(pull_root())) if f.split('\\')[-1]=='key_pair_default_dir.txt'][0]    
     with open(kpfile,'r') as f: 
         default_path = f.read()
         f.close()
@@ -60,9 +60,7 @@ def get_package_kp_dir():
 
 def get_default_kp_dir(): 
     '''Get the default key pair directory'''    
-    kp_dir = get_package_kp_dir()                             
-    if kp_dir =='': 
-        raise Exception('Please use the "set_default_kp_dir" method to set a default key-pair storage directory. You only need to do this once.')
+    kp_dir = get_package_kp_dir()
     return kp_dir
 
 def set_default_kp_dir(directory : str): 
@@ -74,11 +72,3 @@ def set_default_kp_dir(directory : str):
     print('Default path has been set to '+kpfile)    
 
 
-if __name__ == '__main__':
-    pull_root()
-    try: 
-        directory = get_package_kp_dir()
-        print('Default key-pair directory is %s' % directory)
-    except: 
-        directory = input('Please select a default directory in which to save your key-pairs.')
-        print('Setting %s as the default key-pair directory, you can change it using spot_connect.utils.set_default_kp_dir(<new directory>)' % directory)
