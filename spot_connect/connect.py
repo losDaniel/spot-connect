@@ -35,11 +35,11 @@ import argparse, sys, time, os
 
 root = Path(os.path.dirname(os.path.abspath(__file__)))
 
-from spot_connect import spot_utils, spot_instances, instance_functions, elastic_file_systems
+from spot_connect import sutils, instances, methods, elastic_file_systems
 
-if __name__ == '__main__':                                                     # Main execution 
+def main():                                                     # Main execution 
     
-    profiles=spot_utils.load_profiles()         
+    profiles=sutils.load_profiles()         
 
     parser = argparse.ArgumentParser(description='Launch spot instance')
     parser.add_argument('-n', '--name', help='Name of the spot instance', required=True)
@@ -62,23 +62,38 @@ if __name__ == '__main__':                                                     #
     print('#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#', flush=True)
     print('', flush=True)
     
-    
+    try: 
+        kp_dir = sutils.get_package_kp_dir() 
+        if kp_dir =='': 
+            raise Exception   
+        print('Default key-pair directory is "%s"' % kp_dir)
+    except: 
+        kp_dir = input('Please select a default directory in which to save your key-pairs: ')
+        sutils.set_default_kp_dir(kp_dir)
+        print('You can change the default key-pair directory using spot_connect.sutils.set_default_kp_dir(<dir>)' % kp_dir)
+
+    # Add a forward slash to the kp_dir 
+    if kp_dir[-1]!='/':
+        kp_dir = kp_dir + '/'
+
     # Launch the instance using the name profile, instance profile and monitoring arguments     
     try:                                                   
-        instance, profile = spot_instances.launch_spot_instance(args.name, profile, instance_profile=args.instanceprofile, monitoring=args.monitoring)  # Launch or connect to the spot instance under the given name 
+        instance, profile = instances.launch_spot_instance(args.name, profile, instance_profile=args.instanceprofile, monitoring=args.monitoring, kp_dir=kp_dir)  # Launch or connect to the spot instance under the given name 
     except Exception as e:
         raise e
         sys.exit(1)
 
     if profile['efs_mount']: 
-        print('Profile requesting EFS mount...')
         
         # If no filesystem name is submitted then do not attach a file system 
-        if args.filesystem=='':                                                
+        if args.filesystem=='':       
+            print('No EFS mount requested for this instance.')                                         
             pass
 
         # Otherwise create the file system and attach an efs mount. 
         else: 
+            print('Profile requesting EFS mount...')
+        
             fs_name = args.filesystem                                          
 
             try:                                                               # Create and/or mount an EFS to the instance 
@@ -87,7 +102,7 @@ if __name__ == '__main__':                                                     #
                 raise e 
                 sys.exit(1)        
             print('Connecting to instance to link EFS...')
-            instance_functions.run_script(instance, profile['username'], elastic_file_systems.compose_mount_script(filesystem_dns), cmd=True)
+            methods.run_script(instance, profile['username'], elastic_file_systems.compose_mount_script(filesystem_dns), cmd=True)
             
     st = time.time() 
 
@@ -95,7 +110,7 @@ if __name__ == '__main__':                                                     #
         files_to_upload = [] 
         for file in args.upload.split(','):
             files_to_upload.append(os.path.abspath(file))
-        instance_functions.upload_to_ec2(instance, profile['username'], files_to_upload, remote_dir=args.remotepath)    
+        methods.upload_to_ec2(instance, profile['username'], files_to_upload, remote_dir=args.remotepath)    
 
     print('Time to Upload: %s' % str(time.time()-st))
 
@@ -109,7 +124,7 @@ if __name__ == '__main__':                                                     #
     for script in profile['scripts'] + scripts_to_run:
         print('\nExecuting script "%s"...' % str(script))
         try:
-            if not instance_functions.run_script(instance, profile['username'], script):
+            if not methods.run_script(instance, profile['username'], script):
                 break
         except Exception as e: 
             print(str(e))
@@ -118,8 +133,8 @@ if __name__ == '__main__':                                                     #
     print('Time to Run Scripts: %s' % str(time.time()-st))
     
     if args.activeprompt:
-        instance_functions.active_shell(instance, profile['username'])
+        methods.active_shell(instance, profile['username'])
 
     if args.terminate:                                                         # If we want to terminate the instance 
-        instance_functions.terminate_instance(instance['InstanceId'])                             # termination overrrides everything else 
+        methods.terminate_instance(instance['InstanceId'])                             # termination overrrides everything else 
         print('Script %s has been terminated' % str(args.name))

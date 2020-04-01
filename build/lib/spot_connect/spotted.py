@@ -16,9 +16,9 @@ from path import Path
 
 root = Path(os.path.dirname(os.path.abspath(__file__)))
 
-from spot_connect import spot_utils, spot_instances, instance_functions, elastic_file_systems
+from spot_connect import utils, instances, methods, elastic_file_systems
 
-class spotted: 
+class SpotInstance: 
     
     profiles=spot_utils.load_profiles()         
 
@@ -140,7 +140,7 @@ class spotted:
         if kp_dir is not None: 
             self.kp_dir = kp_dir
         else: 
-            self.kp_dir = os.getcwd()
+            self.kp_dir = root
         
         self.sec_group = None 
         if sec_group is not None:

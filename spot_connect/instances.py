@@ -15,9 +15,7 @@ MIT License 2020
 
 import boto3, paramiko, time, sys 
 
-from spot_connect import spot_utils 
-
-key_pair_directory = spot_utils.get_default_kp_dir()
+from spot_connect import sutils 
 
 def launch_spot_instance(spotid, 
                          profile, 
@@ -25,7 +23,7 @@ def launch_spot_instance(spotid,
                          monitoring=True, 
                          spot_wait_sleep=5, 
                          instance_wait_sleep=5, 
-                         kp_dir=key_pair_directory, 
+                         kp_dir=None, 
                          enable_nfs=True, 
                          enable_ds=True):
     '''
@@ -62,6 +60,9 @@ def launch_spot_instance(spotid,
         # Create a key pair on AWS
         keypair = client.create_key_pair(KeyName=profile['key_pair'][0])       
         
+        if kp_dir is None: 
+            kp_dir = sutils.get_default_kp_dir()
+
         # Download the private key into the CW
         with open(kp_dir+'/'+profile['key_pair'][1], 'w') as file:             
             file.write(keypair['KeyMaterial'])
@@ -74,7 +75,7 @@ def launch_spot_instance(spotid,
             print('Key pair detected, re-using...')
         else: 
             sys.stdout.write("Was not able to find Key-Pair in default directory "+str(kp_dir))
-            sys.stdout.write("\nTo reset default directory run: stop_aws.spot_utils.set_default_kp_dir(<dir>)")
+            sys.stdout.write("\nTo reset default directory run: spot_connect.sutils.set_default_kp_dir(<dir>)")
             sys.stdout.flush()   
             raise e 
 
@@ -282,8 +283,7 @@ def launch_spot_instance(spotid,
     if instance_status!='ok':                                                  # Wait until the instance is runing to connect 
         raise Exception('Failed to boot, instance status: %s' % str(instance_status))
 
-    sys.stdout.write('..Online')
-    sys.stdout.flush()   
+    print('..Online')
 
     return instance, profile
 

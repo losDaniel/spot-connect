@@ -18,6 +18,11 @@ setup(
 	license='MIT',
 	keywords='aws ec2 cloud ssh machinelearning virtualmachine',
 	packages=['spot_connect'],
+	entry_points={
+		'console_scripts':[
+			'spot_connect = spot_connect.connect:main'
+		]
+	},
 	install_requires=['boto3','netaddr','paramiko','path'],
 	python_requires='>=3.7',
 	package_data={'spot_connect':['key_pair_default_dir.txt','profiles.txt']},

@@ -58,6 +58,13 @@ def get_package_kp_dir():
         f.close()
     return default_path 
 
+def get_default_kp_dir(): 
+    '''Get the default key pair directory'''    
+    kp_dir = get_package_kp_dir()                             
+    if kp_dir =='': 
+        raise Exception('Please use the "set_default_kp_dir" method to set a default key-pair storage directory. You only need to do this once.')
+    return kp_dir
+
 def set_default_kp_dir(directory : str): 
     '''Set the default key pair directory'''
     kpfile = [f for f in list(absoluteFilePaths(pull_root())) if f.split('\\')[-1]=='key_pair_default_dir.txt'][0]    
@@ -66,12 +73,12 @@ def set_default_kp_dir(directory : str):
         f.close()
     print('Default path has been set to '+kpfile)    
 
-def get_default_kp_dir(): 
-    '''Get the default key pair directory'''    
-    kp_dir = get_package_kp_dir()                             
-    if kp_dir =='': 
-        raise Exception('Please use the "set_default_kp_dir" method to set a default key-pair storage directory. You only need to do this once.')
-    return kp_dir
- 
+
 if __name__ == '__main__':
     pull_root()
+    try: 
+        directory = get_package_kp_dir()
+        print('Default key-pair directory is %s' % directory)
+    except: 
+        directory = input('Please select a default directory in which to save your key-pairs.')
+        print('Setting %s as the default key-pair directory, you can change it using spot_connect.utils.set_default_kp_dir(<new directory>)' % directory)

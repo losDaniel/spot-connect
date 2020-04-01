@@ -14,7 +14,7 @@ MIT License 2020
 """
 
 import sys, os, boto3 
-from spot_connect import spot_instances, spot_utils, interactive
+from spot_connect import instances, utils, interactive
 
 def run_script(instance, user_name, script, cmd=False, port=22, kp_dir=os.getcwd()):
     '''

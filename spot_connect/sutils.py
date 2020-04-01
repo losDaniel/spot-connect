@@ -52,26 +52,23 @@ def printTotals(transferred, toBeTransferred):
 
 def get_package_kp_dir():
     '''Get the key-pair directory'''
-    kpfile = [f for f in list(absoluteFilePaths(pull_root())) if f.split('\\')[-1]=='profiles.txt'][0]    
+    kpfile = [f for f in list(absoluteFilePaths(pull_root())) if f.split('\\')[-1]=='key_pair_default_dir.txt'][0]    
     with open(kpfile,'r') as f: 
         default_path = f.read()
         f.close()
     return default_path 
 
+def get_default_kp_dir(): 
+    '''Get the default key pair directory'''    
+    kp_dir = get_package_kp_dir()
+    return kp_dir
+
 def set_default_kp_dir(directory : str): 
     '''Set the default key pair directory'''
-    kpfile = [f for f in list(absoluteFilePaths(pull_root())) if f.split('\\')[-1]=='profiles.txt'][0]    
+    kpfile = [f for f in list(absoluteFilePaths(pull_root())) if f.split('\\')[-1]=='key_pair_default_dir.txt'][0]    
     with open(kpfile,'w') as f: 
         f.write(directory)
         f.close()
-    print('Default path has been set to '+default_path)    
+    print('Default path has been set to '+kpfile)    
 
-def get_default_kp_dir(): 
-    '''Get the default key pair directory'''    
-    kp_dir = get_package_kp_dir()                             
-    if kp_dir =='': 
-        raise Exception('Please use the "set_default_kp_dir" method to set a default key-pair storage directory. You only need to do this once.')
-    return kp_dir
- 
-if __name__ == '__main__':
-    pull_root()
+

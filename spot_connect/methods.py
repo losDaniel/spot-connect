@@ -14,9 +14,9 @@ MIT License 2020
 """
 
 import sys, os, boto3 
-from spot_connect import spot_instances, spot_utils, interactive
+from spot_connect import instances, sutils, interactive
 
-def run_script(instance, user_name, script, cmd=False, port=22, kp_dir=os.getcwd()):
+def run_script(instance, user_name, script, cmd=False, port=22, kp_dir=None):
     '''
     Run a script on the the given instance 
     __________
@@ -28,12 +28,15 @@ def run_script(instance, user_name, script, cmd=False, port=22, kp_dir=os.getcwd
     - port : port to use to connect to the instance 
     '''
     
+    if kp_dir is None: 
+        kp_dir = sutils.get_default_kp_dir()
+
     if cmd: 
         commands = script
     else:   
         commands = open(script, 'r').read().replace('\r', '')
         
-    client = spot_instances.connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username=user_name,port=port)
+    client = instances.connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username=user_name,port=port)
     
     session = client.get_transport().open_session()
     session.set_combine_stderr(True)                                           # Combine the error message and output message channels
@@ -52,7 +55,7 @@ def run_script(instance, user_name, script, cmd=False, port=22, kp_dir=os.getcwd
     return True
 
 
-def active_shell(instance, user_name, port=22, kp_dir=os.getcwd()): 
+def active_shell(instance, user_name, port=22, kp_dir=None): 
     '''
     Leave a shell active
     __________
@@ -61,8 +64,11 @@ def active_shell(instance, user_name, port=22, kp_dir=os.getcwd()):
     - user_name : string. SSH username for accessing instance, default usernames for AWS images can be found at https://alestic.com/2014/01/ec2-ssh-username/
     - port : port to use to connect to the instance 
     '''    
+
+    if kp_dir is None: 
+        kp_dir = sutils.get_default_kp_dir()
     
-    client = spot_instances.connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username=user_name,port=port)
+    client = instances.connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username=user_name,port=port)
 
     console = client.invoke_shell()                                            
     console.keep_this = client                                                
@@ -81,7 +87,7 @@ def active_shell(instance, user_name, port=22, kp_dir=os.getcwd()):
     return True 
 
 
-def upload_to_ec2(instance, user_name, files, remote_dir='.', kp_dir=os.getcwd()):
+def upload_to_ec2(instance, user_name, files, remote_dir='.', kp_dir=None):
     '''
     Upload files directly to an EC2 instance. Speed depends on internet connection and not instance type. 
     __________
@@ -91,14 +97,18 @@ def upload_to_ec2(instance, user_name, files, remote_dir='.', kp_dir=os.getcwd()
     - files : string or list of strings. single file, list of files or directory to upload. If it is a directory end in "/" 
     - remote_dir : '.'  string.The directory on the instance where the files will be uploaded to 
     '''
-    client = spot_instances.connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username='ec2-user',port=22)
+
+    if kp_dir is None: 
+        kp_dir = sutils.get_default_kp_dir()
+
+    client = instances.connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username='ec2-user',port=22)
     print('Connected. Uploading files...')
     stfp = client.open_sftp()
 
     try: 
     	for f in files: 
             print('Uploading %s' % str(f.split('\\')[-1]))
-            stfp.put(f, remote_dir+'/'+f.split('\\')[-1], callback=spot_utils.printTotals, confirm=True)
+            stfp.put(f, remote_dir+'/'+f.split('\\')[-1], callback=sutils.printTotals, confirm=True)
 
     except Exception as e:
         raise e
@@ -107,7 +117,7 @@ def upload_to_ec2(instance, user_name, files, remote_dir='.', kp_dir=os.getcwd()
     return True 
 
 
-def download_from_ec2(instance, username, get, put='.'):
+def download_from_ec2(instance, username, get, put='.', kp_dir=None):
     '''
     Download files directly from an EC2 instance. Speed depends on internet connection and not instance type. 
     __________
@@ -117,14 +127,18 @@ def download_from_ec2(instance, username, get, put='.'):
     - get : str or list of str. File or list of file paths to get from the instance 
     - put : str or list of str. Folder to place the files in `get` 
     '''
+
+    if kp_dir is None: 
+        kp_dir = sutils.get_default_kp_dir()
+
     client = boto3.client('ec2', region_name='us-west-2')
-    client = spot_instances.connect_to_instance(instance['PublicIpAddress'],instance['KeyName'],username=username,port=22)
+    client = instances.connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username=username,port=22)
 
     stfp = client.open_sftp()
 
     for idx, file in enumerate(get): 
         try: 
-            stfp.get(file,put[idx], callback=spot_utils.printTotals)
+            stfp.get(file,put[idx], callback=sutils.printTotals)
         except Exception as e: 
             print(file)
             raise e

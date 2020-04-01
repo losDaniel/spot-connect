@@ -15,7 +15,7 @@ MIT License 2020
 
 import boto3, paramiko, time, sys 
 
-from spot_connect import spot_utils 
+from spot_connect import utils 
 
 key_pair_directory = spot_utils.get_default_kp_dir()
 
@@ -174,8 +174,7 @@ def launch_spot_instance(spotid,
 
     else:
         # Otherwise request a new one 
-        sys.stdout.write('Requesting spot instance')
-        sys.stdout.flush()  
+        print('Requesting spot instance')
 
         response = client.request_spot_instances(                              
             AvailabilityZoneGroup=profile['region'],
@@ -251,8 +250,7 @@ def launch_spot_instance(spotid,
 
             attempt+=1 
 
-    sys.stdout.write('Retrieving instance by id')
-    sys.stdout.flush()             
+    print('Retrieving instance by id')
 
     try: 
         reservations = client.describe_instances(InstanceIds=[instance_id])['Reservations']
