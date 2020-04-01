@@ -60,11 +60,11 @@ def get_package_kp_dir():
 
 def set_default_kp_dir(directory : str): 
     '''Set the default key pair directory'''
-    kpfile = [f for f in list(absoluteFilePaths(pull_root())) if f.split('\\')[-1]=='key_pair_default_dir.txt'][0]    
+    kpfile = [f for f in list(absoluteFilePaths(pull_root())) if f.split('\\')[-1]=='profiles.txt'][0]    
     with open(kpfile,'w') as f: 
         f.write(directory)
         f.close()
-    print('Default path has been set to '+kpfile)    
+    print('Default path has been set to '+default_path)    
 
 def get_default_kp_dir(): 
     '''Get the default key pair directory'''    

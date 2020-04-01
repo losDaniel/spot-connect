@@ -174,7 +174,8 @@ def launch_spot_instance(spotid,
 
     else:
         # Otherwise request a new one 
-        print('Requesting spot instance')
+        sys.stdout.write('Requesting spot instance')
+        sys.stdout.flush()  
 
         response = client.request_spot_instances(                              
             AvailabilityZoneGroup=profile['region'],
@@ -250,7 +251,8 @@ def launch_spot_instance(spotid,
 
             attempt+=1 
 
-    print('Retrieving instance by id')
+    sys.stdout.write('Retrieving instance by id')
+    sys.stdout.flush()             
 
     try: 
         reservations = client.describe_instances(InstanceIds=[instance_id])['Reservations']

@@ -140,7 +140,7 @@ class spotted:
         if kp_dir is not None: 
             self.kp_dir = kp_dir
         else: 
-            self.kp_dir = root
+            self.kp_dir = os.getcwd()
         
         self.sec_group = None 
         if sec_group is not None:
