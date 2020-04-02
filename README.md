@@ -20,8 +20,7 @@ Because spot instances rely on excess capacity they can be requisitioned by Amaz
 
 4) perform a number of other essential tasks such as executing scripts and commands, uploading data directly to an instance, transfer data from S3 to EFS and back, and more. 
 
-
-## spot_connect - command line
+## spot_connect (Command Line)
 
 The `spot_connect.py` script can be executed from the command line to launch an instance or reconnect to an instance, mount an elastic files system, upload files, execute scripts and leave an active shell connected to the instance open in your command line. 
 
@@ -31,7 +30,7 @@ To launch an instance open your command prompt and use the following command
 
 ![LaunchInstance](https://github.com/dankUndertone/Spot-Instance-AWS/blob/master/launch_instance.gif)
 
-The command above creates an instance called "test" and since no filesystem name is specified it creates an efs by the same name. It mounts the efs to the instance automatically and uploads one analysis script and one data file, then it runs the test script and leave an open shell for the user once everything is done.
+The command above creates an instance called "test" and since no filesystem name is specified it creates an efs by the same name. It mounts the efs to the instance automatically and uploads one analysis script and one data file, then it runs the test script and leave an open shell for the user once everything is done. 
 
 ### Options
 
@@ -72,6 +71,25 @@ The command above creates an instance called "test" and since no filesystem name
 `-t`<br>
 *Terminate* is a boolean. If "True" the instance specified in the `-n` (name) argument will be terminated and nothing else will be done (*Terminate* overrides all other arguments). 
 
+**Launching vs. reconnecting to an instance**
+
+The settings you may define when launching an instance are: 
+- profile
+- monitoring 
+- instance_profile 
+
+__example__: `$ spot_connect -n VM1 -p t3.small -m True -ip role1`  
+
+Once an instance is launched with these settings they are fixed and do not need to be defined when connecting, such that I could open a prompt onto the instance using:
+
+`$ spot_connect -n VM1 -a True`
+
+and the instance would already be on a t3 processor with monitoring enabled and the instance_profile = "role1" 
+
+- filesystem : can also be set at the launch and ommited from subsequent reconnects however, after a certain number of reconnects/period of time the file system will have to be re-specified so best practice is to always define it if you want to ensure you can access it from within the instance.  
+
+__Changing these specific settings after an instance has been created can be done but has not been incorporated into this module because, given the temporary nature of spot instances, relaunching the instance is an easy alternative.__ 
+
 <br><br>
 ## Elastic File System 
 
@@ -93,13 +111,13 @@ Different hardware is might be more or less appropriate depending on the what yo
 
 ### Profile Types 
 
-This list will be updated as more profiles are added. To see the specific values for each profile please check `spot_connect.py`. The pre-set profiles currently available are: 
+This list will be updated as more profiles are added. To see the existing profiles check "profiles.txt." The pre-set profiles currently available are: 
 
 `"default"` : an example instance with $0.004 max cost instance that will mount an EFS and kickoff with a deep learning image in `us-west-2` region. 
 
 `"datasync"` : a $0.15 max cost instance that can be used to as a datasync agent to assist with transfers in `us-west-2` region, no EFS is mounted.  
 
-`"gateway"` : (in progress) an instance that can be uses the AWS gateway AMI to provide a gateway for NFS ports that can be used in data transfers including datasync. 
+There are several 
 
 ## Suggested guidelines for projects
 

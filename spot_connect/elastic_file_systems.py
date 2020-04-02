@@ -144,8 +144,7 @@ def retrieve_efs_mount(file_system_name, instance, new_mount=False, region='us-w
                 sys.stdout.flush() 
                 time.sleep(mount_wait)
 
-        sys.stdout.write('Detected')
-        sys.stdout.flush() 
+        print('Detected')
 
     else: 
         mount_target = mount_targets[0]

@@ -156,24 +156,57 @@ class LinkAWS:
 		print('Use the following to check progress: <SpotInstance("downloader_'+didx+'")>.run("'+instance_path+'/download_'+didx+'.txt", cmd=True)')
         
 
+	def clone_repo(self, instance, repo_link, target_folder, directory='/home/ec2-user/efs/'):
+		'''
+		Clone a git repo to the instance. Must specify a directory and target folder on the instance. This is so that organization on the instance is actively tracked by the user. 
 
-    def set_distributed_apr(self, nickname, strategy='ABCDH', database='/home/ec2-user/efs/database/', resultpath='/home/ec2-user/efs/ABCDH/', overwrite='False'):
-        '''Modify the set_apr.sh script to accomodate whatever variables we need'''
-        
-        with open(self.awsdir+'/set_apr_template.sh', 'r') as f: 
-            txt = f.read()
-            txt = txt.replace('STRATEGYNAME',strategy)
-            txt = txt.replace('DATABASE',database)
-            txt = txt.replace('RESULTPATH',resultpath)
-            # The findPatterns method in strategy miner will create a PERMNICKNAME folder in the RESULTPATH
-            txt = txt.replace('PERMNICKNAME', nickname)
-            txt = txt.replace('OVERWRITEOPT', overwrite)
-            txt = txt.replace('OUTPUT', 'Log_'+nickname+'.txt')
-    
-        with open(self.awsdir+'/set_apr.sh', 'w') as w: 
-            w.write(txt)
-            w.close()
-          
+		Private Repos - the links for private repositories should be formatted as: https://username:password@github.com/username/repo_name.git
+		__________
+		parameters
+		- instance : spotted.SpotInstance. The specific instance in which to clone the repo 
+		- repo_link : str. Git repo link. The command executed is: git clone <repo_link> <path>
+		- target_folder : str. Name of the folder to store the repo in, folder will be created in the given directory
+		- directory : str. Instance directory to place the target folder and git repo. If directory is '.' target folder will be created in the home directory. To view the home directory for a given instance use the LinkAWS.get_instance_home_directory method
+		'''
+		proceed = instance.dir_exists(directory)
+		if proceed:				
+			instance.run('git clone '+repo_link+'', cmd=True)
+		else: 
+			raise Exception(str(directory)+' directory was not found on instance')
+
+
+	def update_repo(self, instance, instance_path, branch='master', repo_link=None):
+		'''
+		Update a given local repo to match the remote  
+		__________
+		parameters
+		- instance : spotted.SpotInstance. The specific instance to use 
+		- instance_path : str. The path to the local repo folder in the instance 
+		- branch : str. switch to this branch of the repo 
+		- repo_link : str. Mainly for private repos. In order to git pull a private repo you must submit a link of the format https://username:password@github.com/username/repo_name.git 
+		'''
+		proceed = instance.dir_exists(directory)
+		if proceed:				
+
+	        command = ''
+	        command +='cd '+directory+'\n'
+	        command +='git checkout '+branch+'\n'
+	        if repo_link is None: 
+	        	command+='git pull origin/'+branch+'\n'
+	        else: 
+	        	command+='git pull '+repo_link+'\n'
+		else: 
+			raise Exception(str(directory)+' path was not found on instance')
+
+	def run_distributed_jobs(self):
+
+		spot_fleet = {} 
+
+		for nn in jobs: 
+			
+			clear_output(wait=True)
+
+
     def runDistributedAprJobs(self, prefix, jobs, upload_path, use_profile='c5.large'):
         '''Distribute the APR Jobs across a series of instances with the given profile'''
 
@@ -197,6 +230,27 @@ class LinkAWS:
             spot_fleet[nn].run('aws/set_apr.sh')
             
         return spot_fleet    
+
+
+
+    def set_distributed_apr(self, nickname, strategy='ABCDH', database='/home/ec2-user/efs/database/', resultpath='/home/ec2-user/efs/ABCDH/', overwrite='False'):
+        '''Modify the set_apr.sh script to accomodate whatever variables we need'''
+        
+        with open(self.awsdir+'/set_apr_template.sh', 'r') as f: 
+            txt = f.read()
+            txt = txt.replace('STRATEGYNAME',strategy)
+            txt = txt.replace('DATABASE',database)
+            txt = txt.replace('RESULTPATH',resultpath)
+            # The findPatterns method in strategy miner will create a PERMNICKNAME folder in the RESULTPATH
+            txt = txt.replace('PERMNICKNAME', nickname)
+            txt = txt.replace('OVERWRITEOPT', overwrite)
+            txt = txt.replace('OUTPUT', 'Log_'+nickname+'.txt')
+    
+        with open(self.awsdir+'/set_apr.sh', 'w') as w: 
+            w.write(txt)
+            w.close()
+          
+
 
     # DEPRECATED - run_s3_upload has been removed in favor of awscli methods which can be run through bash scripts
 #    def uploadDatabaseToS3(self, bucket='day-trader', database='D:/Day-Trader/database', overwrite=False): 

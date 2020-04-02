@@ -24,6 +24,7 @@ class SpotInstance:
 
     name = None 
     price = None 
+    client = None
     region = None 
     kp_dir = None 
     profile = None 
@@ -79,6 +80,7 @@ class SpotInstance:
         '''
 
         self.name = name 
+        self.client = None 
         
         self.profile = None         
         if profile is None: 
@@ -201,9 +203,20 @@ class SpotInstance:
             methods.run_script(self.instance, self.profile['username'], self.profile['scripts'], kp_dir=self.kp_dir)
 
         self.state = self.instance['State']['Name']
-        print('current instance state: '+self.state)
+        print('\nDone. Current instance state: '+self.state)
     
     
+    def refresh_instance(self):
+        '''Refresh the instance to get its current status & information'''
+        if self.client is None: 
+            client = boto3.client('ec2', region_name=self.profile['region'])
+
+        reservations = client.describe_instances(InstanceIds=[self.instance['InstanceId']])['Reservations']
+        self.instance = reservations[0]['Instances'][0]                             
+        self.state = self.instance['State']['Name']
+        print('Instance refreshed, current state: %s' % str(self.state))
+
+
     def upload(self, files, remotepath):
         '''
         Upload a file or list of files to the instance. If an EFS is connected to the instance files can be uploaded to the EFS through the instance. 
