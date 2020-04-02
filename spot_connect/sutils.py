@@ -13,9 +13,12 @@ spotted class which can be run from a notebook or python script
 MIT License 2020
 """
 
-import os, ast, boto3
+import os, ast, boto3, random, string 
 from path import Path 
 
+
+def genrs(length=10):
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
 def absoluteFilePaths(directory):
     '''Get the absolute file path for every file in the given directory'''

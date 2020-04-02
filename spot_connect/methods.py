@@ -16,7 +16,7 @@ MIT License 2020
 import sys, os, boto3 
 from spot_connect import instances, sutils, interactive
 
-def run_script(instance, user_name, script, cmd=False, port=22, kp_dir=None):
+def run_script(instance, user_name, script, cmd=False, port=22, kp_dir=None, return_output=False):
     '''
     Run a script on the the given instance 
     __________
@@ -45,14 +45,18 @@ def run_script(instance, user_name, script, cmd=False, port=22, kp_dir=None):
     stdout = session.makefile()                                                # Collect the output 
     
     try:
+        if return_output: output = ''
+
         for line in stdout:
-            print(line.rstrip(), flush=True)                                   # Show the output 
-    
+            if return_output: output+=line.rstrip()+'\n'
+            else: print(line.rstrip(), flush=True)                                   # Show the output 
+
     except (KeyboardInterrupt, SystemExit):
         print(sys.stderr, 'Ctrl-C, stopping', flush=True)                      # Keyboard interrupt 
     client.close()                                                             # Close the connection    
-    
-    return True
+
+    if return_output: return True, output     
+    else: return True
 
 
 def active_shell(instance, user_name, port=22, kp_dir=None): 

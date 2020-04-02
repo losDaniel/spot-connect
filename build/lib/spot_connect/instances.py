@@ -263,23 +263,31 @@ def launch_spot_instance(spotid,
     sys.stdout.write('Got instance: '+str(instance['InstanceId'])+'['+str(instance['State']['Name'])+']')
     sys.stdout.flush() 
     
+    if str(instance['State']['Name'])=='terminated':
+        raise Exception('Desired spot request has been terminated, please choose a new instance name or wait until the terminated spot request has expired in the AWS console')
+
     attempt = 0 
     instance_up = False
 
     # Check if the instance has started-up
     while not instance_up:
+        try: 
+            sys.stdout.write(".")
+            sys.stdout.flush() 
+            instance_status = client.describe_instance_status(InstanceIds=[instance_id])['InstanceStatuses'][0]['InstanceStatus']['Status']
+            if instance_status!='initializing':
+                instance_up=True        
+            else:
+                if attempt==0:
+                    sys.stdout.write('\nWaiting for instance to boot...')   
+                    sys.stdout.flush()  
+                time.sleep(instance_wait_sleep)
+                attempt+=1
+        except: 
+            sys.stdout.write(".")
+            sys.stdout.flush() 
+            time.sleep(2)
 
-        sys.stdout.write(".")
-        sys.stdout.flush() 
-        instance_status = client.describe_instance_status(InstanceIds=[instance_id])['InstanceStatuses'][0]['InstanceStatus']['Status']
-        if instance_status!='initializing':
-            instance_up=True        
-        else:
-            if attempt==0:
-                sys.stdout.write('\nWaiting for instance to boot...')   
-                sys.stdout.flush()  
-            time.sleep(instance_wait_sleep)
-            attempt+=1 
     if instance_status!='ok':                                                  # Wait until the instance is runing to connect 
         raise Exception('Failed to boot, instance status: %s' % str(instance_status))
 

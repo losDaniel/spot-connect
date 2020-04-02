@@ -71,9 +71,8 @@ def launch_efs(system_name, region='us-west-2', launch_wait=3):
 
         if file_system['LifeCycleState']=='available':
             available=True
-            sys.stdout.write('...Available')
-            sys.stdout.flush() 
-
+            print('...Available')
+            
         else: 
             sys.stdout.write(".")
             sys.stdout.flush() 

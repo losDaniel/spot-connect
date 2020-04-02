@@ -16,11 +16,11 @@ from path import Path
 
 root = Path(os.path.dirname(os.path.abspath(__file__)))
 
-from spot_connect import utils, instances, methods, elastic_file_systems
+from spot_connect import sutils, instances, methods, elastic_file_systems
 
 class SpotInstance: 
     
-    profiles=utils.load_profiles()         
+    profiles=sutils.load_profiles()         
 
     name = None 
     price = None 
@@ -82,9 +82,9 @@ class SpotInstance:
         
         self.profile = None         
         if profile is None: 
-            self.profile=copy.deepcopy(spotted.profiles['default'])            # create a deep copy so that the class dictionary doesn't get modified  
+            self.profile=copy.deepcopy(SpotInstance.profiles['default'])            # create a deep copy so that the class dictionary doesn't get modified  
         else: 
-            self.profile=copy.deepcopy(spotted.profiles[profile])
+            self.profile=copy.deepcopy(SpotInstance.profiles[profile])
 
         # Set directory in which to save the key-pairs
         self.kp_dir = None 
@@ -199,8 +199,11 @@ class SpotInstance:
             
         if len(self.profile['scripts'])>0:
             methods.run_script(self.instance, self.profile['username'], self.profile['scripts'], kp_dir=self.kp_dir)
-    
 
+        self.state = self.instance['State']['Name']
+        print('current instance state: '+self.state)
+    
+    
     def upload(self, files, remotepath):
         '''
         Upload a file or list of files to the instance. If an EFS is connected to the instance files can be uploaded to the EFS through the instance. 
@@ -257,7 +260,7 @@ class SpotInstance:
         print('Time to Download: %s' % str(time.time()-st))
 
 
-    def run(self, scripts, cmd=False):
+    def run(self, scripts, cmd=False, return_output=False, time_it=False):
         '''
         Run a script or list of scripts
         __________
@@ -276,14 +279,27 @@ class SpotInstance:
             if not cmd:
                 print('\nExecuting script "%s"...' % str(script))
             try:
-                if not methods.run_script(self.instance, self.profile['username'], script, cmd=cmd, kp_dir=self.kp_dir):
+                if return_output: run_stat, output = methods.run_script(self.instance, self.profile['username'], script, cmd=cmd, kp_dir=self.kp_dir, return_output=return_output)
+                else: run_stat = methods.run_script(self.instance, self.profile['username'], script, cmd=cmd, kp_dir=self.kp_dir, return_output=return_output)
+
+                if not run_stat:
                     break
             except Exception as e: 
                 print(str(e))
                 print('Script %s failed with above error' % script)
     
-        print('Time to Run Scripts: %s' % str(time.time()-st))
+        if time_it:
+            print('Time to Run Scripts: %s' % str(time.time()-st))
 
+        if return_output: 
+            return output
+
+
+    def dir_exists(self, dir):
+        output = self.run('[ -d "'+dir+'" ] && echo "True" || echo "False"', cmd=True, return_output=True)
+        if 'True' in output: return True 
+        else: return False
+    
 
     def open_shell(self, port=22):
         '''Open an active shell. --Only works when run from the command prompt--'''

@@ -16,11 +16,11 @@ from path import Path
 
 root = Path(os.path.dirname(os.path.abspath(__file__)))
 
-from spot_connect import utils, instances, methods, elastic_file_systems
+from spot_connect import sutils, instances, methods, elastic_file_systems
 
 class SpotInstance: 
     
-    profiles=utils.load_profiles()         
+    profiles=sutils.load_profiles()         
 
     name = None 
     price = None 
@@ -82,9 +82,9 @@ class SpotInstance:
         
         self.profile = None         
         if profile is None: 
-            self.profile=copy.deepcopy(spotted.profiles['default'])            # create a deep copy so that the class dictionary doesn't get modified  
+            self.profile=copy.deepcopy(SpotInstance.profiles['default'])            # create a deep copy so that the class dictionary doesn't get modified  
         else: 
-            self.profile=copy.deepcopy(spotted.profiles[profile])
+            self.profile=copy.deepcopy(SpotInstance.profiles[profile])
 
         # Set directory in which to save the key-pairs
         self.kp_dir = None 

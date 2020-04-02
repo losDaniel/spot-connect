@@ -8,31 +8,34 @@ Author-email: carlos.d.valcarcel.w@gmail.com
 License: MIT
 Description: # spot-connect
         
-        **This repository is currently in development**
-        
         `pip install spot-connect`
         
-        This repository hosts a module to make launching and executing python scripts on AWS cheap and easy. Spot instances are excess capacity that AWS rents out at a discount through a bidding mechanism. Users can set a maximum price to bid on any excess capacity of any type of hardware loaded with any type of instance. Because spot instances rely on excess capacity they can be requisitioned by Amazon when demand increases, this gives users a 2 minute window to close their session and abandon the spot instance, forcing any unfinished work to resume on another spot instance should that be the user's choice. This module provides users the ability to: 
+        ## Description 
         
-        1) Easily launch a spot instance with any capacity and image they like
+        Note to reader: This module requires you to setup an AWS account as well as the proper permissions within that account. This README is outdated, it still does not include instructions on how to do that and what is required. Nor does it include a description of the full functionality of the module. 
         
-        2) Easily upload or transfer small or large data amounts on and off their instances 
+        **Spot Instances:**
         
-        3) Connect to and interact with their spot instance by executing scripts or through an active prompt 
+        Spot instances are excess capacity that AWS rents out at a discount through a bidding mechanism. Users can set a maximum price to bid on any excess capacity of any type of hardware loaded with any type of os image. 
         
-        For a walk through of how the this module does what it does see my Medium article: 
-        [Mastering the Spot Request - Deep Learning at a Discount](https://medium.com/swlh/mastering-the-aws-spot-instance-2ecf59e242fa)
-        <br><br>
-        ## Spot Connect 
+        Because spot instances rely on excess capacity they can be requisitioned by Amazon when demand increases, this gives users a 2 minute window to close their session and abandon the spot instance, forcing any unfinished work to resume on another spot instance should that be the user's choice. Using this module users may: 
+        
+        1) launch a spot instance with any capacity and image they like from a command prompt, script or notebook.
+        
+        2) create elastic file systems (EFS) to that can be mounted on any number of instances for immediate data access. 
+        
+        3) using a command prompt, open a prompt that is directly linked to any running instance 
+        
+        4) perform a number of other essential tasks such as executing scripts and commands, uploading data directly to an instance, transfer data from S3 to EFS and back, and more. 
+        
+        
+        ## spot_connect - command line
         
         The `spot_connect.py` script can be executed from the command line to launch an instance or reconnect to an instance, mount an elastic files system, upload files, execute scripts and leave an active shell connected to the instance open in your command line. 
         
-        To launch an instance open your command prompt and use the following commands 
+        To launch an instance open your command prompt and use the following command
         
-        
-        `cd <spot_connect.py directory>` 
-        
-        `ptyhon spot_connect.py -n <name> -p <profile> -s <scripts> -f <filesystem> -u <files or dir to upload> -r <path on instance> -a <active shell>`
+        `spot_connect -n <name> -p <profile> -s <scripts> -f <filesystem> -u <files or dir to upload> -r <path on instance> -a <active shell>`
         
         ![LaunchInstance](https://github.com/dankUndertone/Spot-Instance-AWS/blob/master/launch_instance.gif)
         
@@ -105,6 +108,12 @@ Description: # spot-connect
         `"datasync"` : a $0.15 max cost instance that can be used to as a datasync agent to assist with transfers in `us-west-2` region, no EFS is mounted.  
         
         `"gateway"` : (in progress) an instance that can be uses the AWS gateway AMI to provide a gateway for NFS ports that can be used in data transfers including datasync. 
+        
+        ## Suggested guidelines for projects
+        
+        - **Make sure your work can be stopped and resumed programatically**: 
+        
+        Some instances may be requisitioned by AWS and force your work to stop. This is more likely if you are working on high capacity instances. The module makes it possible for you to anticipate these shut-downs so you can save your work and then launch another instance immediately and resume in the same elastic file system. 
         
         
         ## Create Instance Profiles to Create Instances with specific IAM Roles & Access 
