@@ -68,25 +68,32 @@ class SpotInstance:
         parameters
         - name : string. name of the spot instance
         - profile : dict of settings for the spot instance
+        - instance_profile : str. Instance profile with attached IAM roles
         - monitoring : bool, default True. set monitoring to True for the instance 
-        - filesystem : string, default <name>. creation token for the EFS you want to connect to the instance  
+        - filesystem : string, default <name>. Filesystem to connect to the instance. If you want a new EFS to be created with this name set efs_mount = True, if an efs with the same name exists then the instance will be connected to it. 
         - image_id : Image ID from AWS. go to the launch-wizard to get the image IDs or use the boto3 client.describe_images() with Owners of Filters parameters to reduce wait time and find what you need.
         - instance_type : Get a list of instance types and prices at https://aws.amazon.com/ec2/spot/pricing/ 
         - price : float. maximum price willing to pay for the instance. 
         - region : string. AWS region
         - username : string. This will usually depend on the operating system of the image used. For a list of operating systems and defaul usernames check https://alestic.com/2014/01/ec2-ssh-username/
         - key_pair : string. name of the keypair to use. Will search for `key_pair`.pem in the current directory 
+        - kp_dir : string. path name for where to store the key pair files 
         - sec_group : string. name of the security group to use
+        - efs_mount : bool. If True, attach EFS mount. If no EFS mount with the name <filesystem> exists one is created. If filesystem is None the new EFS will have the same name as the instance  
+        - newmount : bool. If True, create a new mount target on the EFS, even if one exists
+        - firewall : str. Firewall settings
         '''
 
         self.name = name 
         self.client = None 
         
+        print('Loading profiles, you can edit profiles in '+str(profile))
+        
         self.profile = None         
         if profile is None: 
             self.profile=copy.deepcopy(SpotInstance.profiles['default'])            # create a deep copy so that the class dictionary doesn't get modified  
         else: 
-            self.profile=copy.deepcopy(SpotInstance.profiles[profile])
+            self.profile=copy.deepcopy(SpotInstance.profiles[profile])        
 
         # Set directory in which to save the key-pairs
         self.kp_dir = None 
@@ -146,6 +153,7 @@ class SpotInstance:
         self.region = None 
         if region is not None:
             self.profile['region']=region
+
         
         self.username = None 
         if username is not None:
@@ -208,8 +216,7 @@ class SpotInstance:
     
     def refresh_instance(self):
         '''Refresh the instance to get its current status & information'''
-        if self.client is None: 
-            client = boto3.client('ec2', region_name=self.profile['region'])
+        client = boto3.client('ec2', region_name=self.profile['region'])
 
         reservations = client.describe_instances(InstanceIds=[self.instance['InstanceId']])['Reservations']
         self.instance = reservations[0]['Instances'][0]                             
