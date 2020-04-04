@@ -67,6 +67,20 @@ def change_default_region(region, deactive_warning=True):
 #    print(str_profiles)
     save_profiles(str_profiles)
 
+
+def change_default_image(image, deactive_warning=True): 
+    if not deactive_warning:
+        ans = input('Warning: doing this will change the "image_id" for all profiles. Continue?(y): ')
+        if ans!='y':
+            raise Exception('User exit')
+
+    profiles = load_profiles()
+    str_profiles = str(profiles)
+    str_profiles = str_profiles.replace(profiles['default']['image_id'], image)
+#    print(str_profiles)
+    save_profiles(str_profiles)
+
+
 def show_instances(): 
     client = boto3.client('ec2', region_name='us-west-2')
     print('Instances (by Key names):')
