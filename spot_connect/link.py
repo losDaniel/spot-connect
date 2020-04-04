@@ -11,11 +11,14 @@ infrastructure using the spotted module.
 MIT License 2020
 '''
 
-import boto3 
+import boto3, os
+from path import Path 
 
-from IPython.display import clear_output
+root = Path(os.path.dirname(os.path.abspath(__file__)))
+
+from spot_connect import sutils 
+from spot_connect import spotted 
 from spot_connect.sutils import genrs, load_profiles
-from spot_connect.spotted import SpotInstance
 
 class LinkAWS:
     
@@ -60,8 +63,7 @@ class LinkAWS:
         self.instances = {} 
 
     def list_profiles(self):
-        load_profiles() 
-
+        return load_profiles() 
 
     def launch_instance(self, 
                         name, 
@@ -73,33 +75,33 @@ class LinkAWS:
                         new_mount=None, 
                         instance_profile=None
                         ): 
-    '''        
-    Launch a spot instance and store it in the LinkAWS.instances dict attribute. 
-    Default parameters are the same as for the spotted.SpotInstance Class. 
-    __________
-    parameters
-    - name : string. name of the spot instance
-    - profile : dict of settings for the spot instance
-    - filesystem : string, default <name>. creation token for the EFS you want to connect to the instance  
-    - kp_dir : string. path name for where to store the key pair files 
-    - monitoring : bool, default True. set monitoring to True for the instance 
-    - efs_mount : bool. If True, attach EFS mount. If no EFS mount with the name <filesystem> exists one is created. If filesystem is None the new EFS will have the same name as the instance  
-    - newmount : bool. If True, create a new mount target on the EFS, even if one exists
-    - instance_profile : str. Instance profile with attached IAM roles
-    '''
-
+        '''        
+        Launch a spot instance and store it in the LinkAWS.instances dict attribute. 
+        Default parameters are the same as for the spotted.SpotInstance Class. 
+        __________
+        parameters
+        - name : string. name of the spot instance
+        - profile : dict of settings for the spot instance
+        - filesystem : string, default <name>. creation token for the EFS you want to connect to the instance  
+        - kp_dir : string. path name for where to store the key pair files 
+        - monitoring : bool, default True. set monitoring to True for the instance 
+        - efs_mount : bool. If True, attach EFS mount. If no EFS mount with the name <filesystem> exists one is created. If filesystem is None the new EFS will have the same name as the instance  
+        - newmount : bool. If True, create a new mount target on the EFS, even if one exists
+        - instance_profile : str. Instance profile with attached IAM roles
+        '''
+        
         if kp_dir is None:
             kp_dir = self.kp_dir
         if filesystem is None: 
             filesystem = self.efs
-
+    
         instance = spotted.SpotInstance(name, 
                                         profile=profile, 
                                         filesystem=filesystem,
                                         kp_dir=kp_dir,
                                         monitoring=monitoring,
                                         efs_mount=efs_mount,
-                                        new_mount=new_mount,
+                                        newmount=new_mount,
                                         instance_profile=instance_profile,
                                         )
         self.instances[name] = instance
@@ -124,6 +126,13 @@ class LinkAWS:
     def terminate_monitor(self):
         '''Terminate the monitor instance'''
         self.monitor.terminate()
+
+
+    def count_cores(self, instance):
+        instance.upload(os.path.abspath(root)+'\\core_count.py', '.')
+        cores = instance.run('python core_count.py', cmd=True, return_output=True)
+        return cores
+
 
     def get_instance_home_directory(self, instance=None):
     	'''
@@ -176,9 +185,9 @@ class LinkAWS:
         self.downloader = spotted.SpotInstance('downloader_'+didx, profile='t3.small', filesystem=fs, kp_dir=self.kp_dir)
         
         if 's3://' in source: 
-            tance_file_exists, instance_path, bucket_path = self.downloader.dir_exists(dest), dest, source 
+            instance_file_exists, instance_path, bucket_path = self.downloader.dir_exists(dest), dest, source 
         elif 's3://' in dest:
-            tance_file_exists, instance_path, bucket_path = self.downloader.dir_exists(source), source, dest
+            instance_file_exists, instance_path, bucket_path = self.downloader.dir_exists(source), source, dest
         else:
             raise Exception('Either the source or dest must be an S3 bucket formatted as "s3://<bucket name>"')
 
@@ -236,70 +245,68 @@ class LinkAWS:
 		- branch : str. switch to this branch of the repo 
 		- repo_link : str. Mainly for private repos. In order to git pull a private repo you must submit a link of the format https://username:password@github.com/username/repo_name.git 
 		'''
-		proceed = instance.dir_exists(directory)
-		if proceed:				
-
+        proceed = instance.dir_exists(instance_path)
+        if proceed:				
 	        command = ''
-	        command +='cd '+directory+'\n'
+	        command +='cd '+instance_path+'\n'
 	        command +='git checkout '+branch+'\n'
 	        if repo_link is None: 
 	        	command+='git pull origin/'+branch+'\n'
 	        else: 
 	        	command+='git pull '+repo_link+'\n'
-		else: 
-			raise Exception(str(directory)+' path was not found on instance')
-
-	def run_distributed_jobs(self):
-
-		spot_fleet = {} 
-
-		for nn in jobs: 
-			
-			clear_output(wait=True)
-
-
-    def runDistributedAprJobs(self, prefix, jobs, upload_path, use_profile='c5.large'):
-        '''Distribute the APR Jobs across a series of instances with the given profile'''
-
-        # Instantiate a dictionary to track all the instances currently executing remote jobs 
-        spot_fleet = {} 
-
-        for nn in jobs:
-
-            clear_output(wait=True)
+        else:
+            raise Exception(str(instance_path)+' path was not found on instance')
             
-            # Modify the apr template to run the apr recognition onthe given template 
-            self.set_distributed_apr(nn)
-
-            # Create an instance for the current permutation and add it to the fleet 
-            spot_fleet[nn] = spotted.spotted(prefix+nn, profile=use_profile, filesystem=self.efs, kp_dir=self.kp_dir)
-
-            # Upload the files we will need on the instance
-            spot_fleet[nn].upload(upload_path+'/'+nn+'.pickle', '/home/ec2-user/efs/Day-Trader/data/outline_permutations')
-
-            # This runs a LOCAL file (aws/set_apr.sh). It loads it and then submits each command to the linux instance remotely 
-            spot_fleet[nn].run('aws/set_apr.sh')
-            
-        return spot_fleet    
-
-
-
-    def set_distributed_apr(self, nickname, strategy='ABCDH', database='/home/ec2-user/efs/database/', resultpath='/home/ec2-user/efs/ABCDH/', overwrite='False'):
-        '''Modify the set_apr.sh script to accomodate whatever variables we need'''
-        
-        with open(self.awsdir+'/set_apr_template.sh', 'r') as f: 
-            txt = f.read()
-            txt = txt.replace('STRATEGYNAME',strategy)
-            txt = txt.replace('DATABASE',database)
-            txt = txt.replace('RESULTPATH',resultpath)
-            # The findPatterns method in strategy miner will create a PERMNICKNAME folder in the RESULTPATH
-            txt = txt.replace('PERMNICKNAME', nickname)
-            txt = txt.replace('OVERWRITEOPT', overwrite)
-            txt = txt.replace('OUTPUT', 'Log_'+nickname+'.txt')
-    
-        with open(self.awsdir+'/set_apr.sh', 'w') as w: 
-            w.write(txt)
-            w.close()
+#    def run_distributed_jobs(self):
+#        spot_fleet = {} 
+#
+#		for nn in jobs: 
+#			
+#			clear_output(wait=True)
+#
+#
+#    def runDistributedAprJobs(self, prefix, jobs, upload_path, use_profile='c5.large'):
+#        '''Distribute the APR Jobs across a series of instances with the given profile'''
+#
+#        # Instantiate a dictionary to track all the instances currently executing remote jobs 
+#        spot_fleet = {} 
+#
+#        for nn in jobs:
+#
+#            clear_output(wait=True)
+#            
+#            # Modify the apr template to run the apr recognition onthe given template 
+#            self.set_distributed_apr(nn)
+#
+#            # Create an instance for the current permutation and add it to the fleet 
+#            spot_fleet[nn] = spotted.spotted(prefix+nn, profile=use_profile, filesystem=self.efs, kp_dir=self.kp_dir)
+#
+#            # Upload the files we will need on the instance
+#            spot_fleet[nn].upload(upload_path+'/'+nn+'.pickle', '/home/ec2-user/efs/Day-Trader/data/outline_permutations')
+#
+#            # This runs a LOCAL file (aws/set_apr.sh). It loads it and then submits each command to the linux instance remotely 
+#            spot_fleet[nn].run('aws/set_apr.sh')
+#            
+#        return spot_fleet    
+#
+#
+#
+#    def set_distributed_apr(self, nickname, strategy='ABCDH', database='/home/ec2-user/efs/database/', resultpath='/home/ec2-user/efs/ABCDH/', overwrite='False'):
+#        '''Modify the set_apr.sh script to accomodate whatever variables we need'''
+#        
+#        with open(self.awsdir+'/set_apr_template.sh', 'r') as f: 
+#            txt = f.read()
+#            txt = txt.replace('STRATEGYNAME',strategy)
+#            txt = txt.replace('DATABASE',database)
+#            txt = txt.replace('RESULTPATH',resultpath)
+#            # The findPatterns method in strategy miner will create a PERMNICKNAME folder in the RESULTPATH
+#            txt = txt.replace('PERMNICKNAME', nickname)
+#            txt = txt.replace('OVERWRITEOPT', overwrite)
+#            txt = txt.replace('OUTPUT', 'Log_'+nickname+'.txt')
+#    
+#        with open(self.awsdir+'/set_apr.sh', 'w') as w: 
+#            w.write(txt)
+#            w.close()
           
 
 
