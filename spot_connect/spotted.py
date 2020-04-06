@@ -11,7 +11,7 @@ but it can be run from a notebook or python script.
 MIT License 2020
 """
 
-import sys, time, os, copy
+import sys, time, os, copy, boto3, re
 from path import Path
 
 root = Path(os.path.dirname(os.path.abspath(__file__)))
@@ -192,21 +192,22 @@ class SpotInstance:
 
         if self.filled_profile['efs_mount']: 
             print('Profile requesting EFS mount...')
-            if self.filesystem=='':             # If no filesystem name is submitted 
-                fs_name = self.name             # Retrieve or create a filesystem with the same name as the instance 
-            else: 
+            if self.filesystem!='':             # If no filesystem name is submitted 
                 fs_name = self.filesystem     
             
-            # Create and/or mount an EFS to the instance 
-            try:                                
-                self.mount_target, self.instance_dns, self.filesystem_dns = elastic_file_systems.retrieve_efs_mount(fs_name, self.instance, new_mount=self.newmount)
-            except Exception as e: 
-                raise e 
-                sys.exit(1)        
-                
-            print('Connecting to instance to link EFS...')
-            methods.run_script(self.instance, self.profile['username'], elastic_file_systems.compose_mount_script(self.filesystem_dns), kp_dir=self.kp_dir, cmd=True)
-            
+                # Create and/or mount an EFS to the instance 
+                try:                                
+                    self.mount_target, self.instance_dns, self.filesystem_dns = elastic_file_systems.retrieve_efs_mount(fs_name, self.instance, new_mount=self.newmount)
+                except Exception as e: 
+                    raise e 
+                    sys.exit(1)        
+
+                print('Connecting to instance to link EFS...')
+                methods.run_script(self.instance, self.profile['username'], elastic_file_systems.compose_mount_script(self.filesystem_dns), kp_dir=self.kp_dir, cmd=True)
+                    
+            else: 
+                pass
+                            
         if len(self.profile['scripts'])>0:
             methods.run_script(self.instance, self.profile['username'], self.profile['scripts'], kp_dir=self.kp_dir)
 
@@ -224,7 +225,7 @@ class SpotInstance:
         print('Instance refreshed, current state: %s' % str(self.state))
 
 
-    def upload(self, files, remotepath):
+    def upload(self, files, remotepath, verbose=False):
         '''
         Upload a file or list of files to the instance. If an EFS is connected to the instance files can be uploaded to the EFS through the instance. 
         __________
@@ -242,9 +243,10 @@ class SpotInstance:
         files_to_upload = [] 
         for file in files:
             files_to_upload.append(os.path.abspath(file))
-        methods.upload_to_ec2(self.instance, self.profile['username'], files_to_upload, remote_dir=remotepath, kp_dir=self.kp_dir)    
+        methods.upload_to_ec2(self.instance, self.profile['username'], files_to_upload, remote_dir=remotepath, kp_dir=self.kp_dir, verbose=verbose)    
     
-        print('Time to Upload: %s' % str(time.time()-st))
+        if verbose:
+            print('Time to Upload: %s' % str(time.time()-st))
         
         
     def download(self, files, localpath):
@@ -313,6 +315,16 @@ class SpotInstance:
 
         if return_output: 
             return output
+
+
+    def count_cores(self):
+        self.upload(os.path.abspath(root)+'\\core_count.py', '.')
+        output = self.run('python core_count.py', cmd=True, return_output=True)
+        
+        logical_cpus = int(re.findall('Logical CPUs: ([0-9]*)', output)[0])
+        physical_cpus = int(re.findall('Physical CPUs: ([0-9]*)', output)[0])
+
+        return logical_cpus, physical_cpus
 
 
     def dir_exists(self, dir):

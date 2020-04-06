@@ -20,6 +20,8 @@ from spot_connect import sutils
 from spot_connect import spotted 
 from spot_connect.sutils import genrs, load_profiles
 
+from IPython.display import clear_output
+
 class LinkAWS:
     
     efs = None 
@@ -246,49 +248,52 @@ class LinkAWS:
 		- repo_link : str. Mainly for private repos. In order to git pull a private repo you must submit a link of the format https://username:password@github.com/username/repo_name.git 
 		'''
         proceed = instance.dir_exists(instance_path)
-        if proceed:				
-	        command = ''
-	        command +='cd '+instance_path+'\n'
-	        command +='git checkout '+branch+'\n'
-	        if repo_link is None: 
-	        	command+='git pull origin/'+branch+'\n'
-	        else: 
-	        	command+='git pull '+repo_link+'\n'
+        if proceed:
+            command = ''
+            command +='cd '+instance_path+'\n'
+            command +='git checkout '+branch+'\n'
+            if repo_link is None:
+                command+='git pull origin/'+branch+'\n'
+            else:
+                command+='git pull '+repo_link+'\n'
+            instance.run(command, cmd=True)
         else:
             raise Exception(str(instance_path)+' path was not found on instance')
             
-#    def run_distributed_jobs(self):
-#        spot_fleet = {} 
-#
-#		for nn in jobs: 
-#			
-#			clear_output(wait=True)
-#
-#
-#    def runDistributedAprJobs(self, prefix, jobs, upload_path, use_profile='c5.large'):
-#        '''Distribute the APR Jobs across a series of instances with the given profile'''
-#
-#        # Instantiate a dictionary to track all the instances currently executing remote jobs 
-#        spot_fleet = {} 
-#
-#        for nn in jobs:
-#
-#            clear_output(wait=True)
-#            
-#            # Modify the apr template to run the apr recognition onthe given template 
-#            self.set_distributed_apr(nn)
-#
-#            # Create an instance for the current permutation and add it to the fleet 
-#            spot_fleet[nn] = spotted.spotted(prefix+nn, profile=use_profile, filesystem=self.efs, kp_dir=self.kp_dir)
-#
-#            # Upload the files we will need on the instance
-#            spot_fleet[nn].upload(upload_path+'/'+nn+'.pickle', '/home/ec2-user/efs/Day-Trader/data/outline_permutations')
-#
-#            # This runs a LOCAL file (aws/set_apr.sh). It loads it and then submits each command to the linux instance remotely 
-#            spot_fleet[nn].run('aws/set_apr.sh')
-#            
-#        return spot_fleet    
-#
+    def run_distributed_jobs(self, prefix, n_jobs, scripts, profile, filesystem=None, uploads=None, upload_path='.'):
+
+        if filesystem is not None: 
+            fs = filesystem
+        else: 
+            fs = self.efs
+
+        try: 
+            assert len(scripts) == n_jobs
+        except: 
+            raise Exception('The number of scripts must be equal to the number of instances')
+
+        if uploads is not None: 
+            try:
+                assert len(uploads)==n_jobs
+            except: 
+                raise Exception('If uploading material to each instance, must provide an equal number of materials and instances')
+                
+        for nn in range(len(n_jobs)): 
+
+            self.launch_instance(prefix+'_'+str(nn), profile=profile, filesystem=fs)
+
+            if uploads is not None: 
+                self.instances[prefix+'_'+str(nn)].upload(uploads[nn],)
+
+            self.instances[prefix+'_'+str(nn)].run(scripts[nn], cmd=True)            		
+            
+            clear_output(wait=True)
+
+
+
+
+
+
 #
 #
 #    def set_distributed_apr(self, nickname, strategy='ABCDH', database='/home/ec2-user/efs/database/', resultpath='/home/ec2-user/efs/ABCDH/', overwrite='False'):

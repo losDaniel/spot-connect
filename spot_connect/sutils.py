@@ -13,7 +13,7 @@ spotted class which can be run from a notebook or python script
 MIT License 2020
 """
 
-import os, ast, boto3, random, string 
+import os, ast, boto3, random, string
 from path import Path 
 
 
@@ -51,7 +51,10 @@ def save_profiles(profile_str):
     '''Save the profile dict str in a .txt file'''
     profile_file = [f for f in list(absoluteFilePaths(pull_root())) if f.split('\\')[-1]=='profiles.txt'][0]    
     
+    #ptosave = ast.literal_eval(profile_str)
+
     with open(profile_file,'w') as f:
+        #f.write(json.dumps(ptosave, ensure_ascii=True))
         f.write(profile_str)
         f.close()
 

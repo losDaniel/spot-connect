@@ -3,6 +3,7 @@ README.md
 setup.py
 spot_connect/__init__.py
 spot_connect/connect.py
+spot_connect/core_count.py
 spot_connect/elastic_file_systems.py
 spot_connect/instances.py
 spot_connect/interactive.py
