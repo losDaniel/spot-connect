@@ -16,7 +16,7 @@ MIT License 2020
 import sys, os, boto3 
 from spot_connect import instances, sutils, interactive
 
-def run_script(instance, user_name, script, cmd=False, port=22, kp_dir=None):
+def run_script(instance, user_name, script, cmd=False, port=22, kp_dir=None, return_output=False):
     '''
     Run a script on the the given instance 
     __________
@@ -45,14 +45,18 @@ def run_script(instance, user_name, script, cmd=False, port=22, kp_dir=None):
     stdout = session.makefile()                                                # Collect the output 
     
     try:
+        if return_output: output = ''
+
         for line in stdout:
-            print(line.rstrip(), flush=True)                                   # Show the output 
-    
+            if return_output: output+=line.rstrip()+'\n'
+            else: print(line.rstrip(), flush=True)                                   # Show the output 
+
     except (KeyboardInterrupt, SystemExit):
         print(sys.stderr, 'Ctrl-C, stopping', flush=True)                      # Keyboard interrupt 
     client.close()                                                             # Close the connection    
-    
-    return True
+
+    if return_output: return True, output     
+    else: return True
 
 
 def active_shell(instance, user_name, port=22, kp_dir=None): 
@@ -87,7 +91,7 @@ def active_shell(instance, user_name, port=22, kp_dir=None):
     return True 
 
 
-def upload_to_ec2(instance, user_name, files, remote_dir='.', kp_dir=None):
+def upload_to_ec2(instance, user_name, files, remote_dir='.', kp_dir=None, verbose=False):
     '''
     Upload files directly to an EC2 instance. Speed depends on internet connection and not instance type. 
     __________
@@ -102,18 +106,21 @@ def upload_to_ec2(instance, user_name, files, remote_dir='.', kp_dir=None):
         kp_dir = sutils.get_default_kp_dir()
 
     client = instances.connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username='ec2-user',port=22)
-    print('Connected. Uploading files...')
+    if verbose:
+        print('Connected. Uploading files...')
     stfp = client.open_sftp()
 
     try: 
     	for f in files: 
-            print('Uploading %s' % str(f.split('\\')[-1]))
+            if verbose:
+                print('Uploading %s' % str(f.split('\\')[-1]))
             stfp.put(f, remote_dir+'/'+f.split('\\')[-1], callback=sutils.printTotals, confirm=True)
 
     except Exception as e:
         raise e
 
-    print('Uploaded to %s' % remote_dir)
+    if verbose:
+        print('Uploaded to %s' % remote_dir)
     return True 
 
 

@@ -177,12 +177,7 @@ def launch_spot_instance(spotid,
         # Otherwise request a new one 
         print('Requesting spot instance')
 
-        response = client.request_spot_instances(                              
-            AvailabilityZoneGroup=profile['region'],
-            ClientToken=spotid,                                                # submit a name to ensure idempotency 
-            DryRun=False,                                                      # if True, checks if you have permission without actually submitting request
-            InstanceCount=1,                                                   # number of individual instances 
-            LaunchSpecification={
+        launch_specs = {
                 'SecurityGroupIds': [
                     profile['security_group'][0],
                 ],
@@ -194,10 +189,18 @@ def launch_spot_instance(spotid,
                 'InstanceType': profile['instance_type'],                      # Instance type. List available programatically or through wizard or at https://aws.amazon.com/ec2/spot/pricing/ 
                 'KeyName': profile['key_pair'][0],                             # Name for the key pair
                 'Monitoring' : {'Enabled': monitoring},                        # Enable monitoring
-                'IamInstanceProfile' : {                                       # Define the IAM role for your instance 
-                        'Name': instance_profile,                                       
-                },
+        }
+        if instance_profile!='':
+            launch_specs['IamInstanceProfile']= {                              # Define the IAM role for your instance 
+                         'Name': instance_profile,                                       
             },
+
+        response = client.request_spot_instances(                              
+            AvailabilityZoneGroup=profile['region'],
+            ClientToken=spotid,                                                # submit a name to ensure idempotency 
+            DryRun=False,                                                      # if True, checks if you have permission without actually submitting request
+            InstanceCount=1,                                                   # number of individual instances 
+            LaunchSpecification=launch_specs,
             SpotPrice=profile['price'],                                        # Must be greater than current instance type price for region, available at https://aws.amazon.com/ec2/spot/pricing/ 
             Type='one-time',                                                   # Persisitence is usually not necessary (given storage backup) or advisable with spot instances 
             InstanceInterruptionBehavior='terminate',                          # Instance terminates if typing `shutdown -h now` in the console

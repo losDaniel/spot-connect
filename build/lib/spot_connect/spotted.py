@@ -11,7 +11,7 @@ but it can be run from a notebook or python script.
 MIT License 2020
 """
 
-import sys, time, os, copy
+import sys, time, os, copy, boto3, re
 from path import Path
 
 root = Path(os.path.dirname(os.path.abspath(__file__)))
@@ -24,6 +24,7 @@ class SpotInstance:
 
     name = None 
     price = None 
+    client = None
     region = None 
     kp_dir = None 
     profile = None 
@@ -67,24 +68,32 @@ class SpotInstance:
         parameters
         - name : string. name of the spot instance
         - profile : dict of settings for the spot instance
+        - instance_profile : str. Instance profile with attached IAM roles
         - monitoring : bool, default True. set monitoring to True for the instance 
-        - filesystem : string, default <name>. creation token for the EFS you want to connect to the instance  
+        - filesystem : string, default <name>. Filesystem to connect to the instance. If you want a new EFS to be created with this name set efs_mount = True, if an efs with the same name exists then the instance will be connected to it. 
         - image_id : Image ID from AWS. go to the launch-wizard to get the image IDs or use the boto3 client.describe_images() with Owners of Filters parameters to reduce wait time and find what you need.
         - instance_type : Get a list of instance types and prices at https://aws.amazon.com/ec2/spot/pricing/ 
         - price : float. maximum price willing to pay for the instance. 
         - region : string. AWS region
         - username : string. This will usually depend on the operating system of the image used. For a list of operating systems and defaul usernames check https://alestic.com/2014/01/ec2-ssh-username/
         - key_pair : string. name of the keypair to use. Will search for `key_pair`.pem in the current directory 
+        - kp_dir : string. path name for where to store the key pair files 
         - sec_group : string. name of the security group to use
+        - efs_mount : bool. If True, attach EFS mount. If no EFS mount with the name <filesystem> exists one is created. If filesystem is None the new EFS will have the same name as the instance  
+        - newmount : bool. If True, create a new mount target on the EFS, even if one exists
+        - firewall : str. Firewall settings
         '''
 
         self.name = name 
+        self.client = None 
+        
+        print('Loading profiles, you can edit profiles in '+str(profile))
         
         self.profile = None         
         if profile is None: 
             self.profile=copy.deepcopy(SpotInstance.profiles['default'])            # create a deep copy so that the class dictionary doesn't get modified  
         else: 
-            self.profile=copy.deepcopy(SpotInstance.profiles[profile])
+            self.profile=copy.deepcopy(SpotInstance.profiles[profile])        
 
         # Set directory in which to save the key-pairs
         self.kp_dir = None 
@@ -144,6 +153,7 @@ class SpotInstance:
         self.region = None 
         if region is not None:
             self.profile['region']=region
+
         
         self.username = None 
         if username is not None:
@@ -182,26 +192,40 @@ class SpotInstance:
 
         if self.filled_profile['efs_mount']: 
             print('Profile requesting EFS mount...')
-            if self.filesystem=='':             # If no filesystem name is submitted 
-                fs_name = self.name             # Retrieve or create a filesystem with the same name as the instance 
-            else: 
+            if self.filesystem!='':             # If no filesystem name is submitted 
                 fs_name = self.filesystem     
             
-            # Create and/or mount an EFS to the instance 
-            try:                                
-                self.mount_target, self.instance_dns, self.filesystem_dns = elastic_file_systems.retrieve_efs_mount(fs_name, self.instance, new_mount=self.newmount)
-            except Exception as e: 
-                raise e 
-                sys.exit(1)        
-                
-            print('Connecting to instance to link EFS...')
-            methods.run_script(self.instance, self.profile['username'], elastic_file_systems.compose_mount_script(self.filesystem_dns), kp_dir=self.kp_dir, cmd=True)
-            
+                # Create and/or mount an EFS to the instance 
+                try:                                
+                    self.mount_target, self.instance_dns, self.filesystem_dns = elastic_file_systems.retrieve_efs_mount(fs_name, self.instance, new_mount=self.newmount)
+                except Exception as e: 
+                    raise e 
+                    sys.exit(1)        
+
+                print('Connecting to instance to link EFS...')
+                methods.run_script(self.instance, self.profile['username'], elastic_file_systems.compose_mount_script(self.filesystem_dns), kp_dir=self.kp_dir, cmd=True)
+                    
+            else: 
+                pass
+                            
         if len(self.profile['scripts'])>0:
             methods.run_script(self.instance, self.profile['username'], self.profile['scripts'], kp_dir=self.kp_dir)
-    
 
-    def upload(self, files, remotepath):
+        self.state = self.instance['State']['Name']
+        print('\nDone. Current instance state: '+self.state)
+    
+    
+    def refresh_instance(self):
+        '''Refresh the instance to get its current status & information'''
+        client = boto3.client('ec2', region_name=self.profile['region'])
+
+        reservations = client.describe_instances(InstanceIds=[self.instance['InstanceId']])['Reservations']
+        self.instance = reservations[0]['Instances'][0]                             
+        self.state = self.instance['State']['Name']
+        print('Instance refreshed, current state: %s' % str(self.state))
+
+
+    def upload(self, files, remotepath, verbose=False):
         '''
         Upload a file or list of files to the instance. If an EFS is connected to the instance files can be uploaded to the EFS through the instance. 
         __________
@@ -219,9 +243,10 @@ class SpotInstance:
         files_to_upload = [] 
         for file in files:
             files_to_upload.append(os.path.abspath(file))
-        methods.upload_to_ec2(self.instance, self.profile['username'], files_to_upload, remote_dir=remotepath, kp_dir=self.kp_dir)    
+        methods.upload_to_ec2(self.instance, self.profile['username'], files_to_upload, remote_dir=remotepath, kp_dir=self.kp_dir, verbose=verbose)    
     
-        print('Time to Upload: %s' % str(time.time()-st))
+        if verbose:
+            print('Time to Upload: %s' % str(time.time()-st))
         
         
     def download(self, files, localpath):
@@ -257,7 +282,7 @@ class SpotInstance:
         print('Time to Download: %s' % str(time.time()-st))
 
 
-    def run(self, scripts, cmd=False):
+    def run(self, scripts, cmd=False, return_output=False, time_it=False):
         '''
         Run a script or list of scripts
         __________
@@ -276,19 +301,37 @@ class SpotInstance:
             if not cmd:
                 print('\nExecuting script "%s"...' % str(script))
             try:
-                if not methods.run_script(self.instance, self.profile['username'], script, cmd=cmd, kp_dir=self.kp_dir):
+                if return_output: run_stat, output = methods.run_script(self.instance, self.profile['username'], script, cmd=cmd, kp_dir=self.kp_dir, return_output=return_output)
+                else: run_stat = methods.run_script(self.instance, self.profile['username'], script, cmd=cmd, kp_dir=self.kp_dir, return_output=return_output)
+
+                if not run_stat:
                     break
             except Exception as e: 
                 print(str(e))
                 print('Script %s failed with above error' % script)
     
-        print('Time to Run Scripts: %s' % str(time.time()-st))
+        if time_it:
+            print('Time to Run Scripts: %s' % str(time.time()-st))
+
+        if return_output: 
+            return output
 
 
-    def open_shell(self, port=22):
-        '''Open an active shell. --Only works when run from the command prompt--'''
-        methods.active_shell(self.instance, self.profile['username'], kp_dir=self.kp_dir)
-    
+    def count_cores(self):
+        self.upload(os.path.abspath(root)+'\\core_count.py', '.')
+        output = self.run('python core_count.py', cmd=True, return_output=True)
+        
+        logical_cpus = int(re.findall('Logical CPUs: ([0-9]*)', output)[0])
+        physical_cpus = int(re.findall('Physical CPUs: ([0-9]*)', output)[0])
+
+        return logical_cpus, physical_cpus
+
+
+    def dir_exists(self, dir):
+        output = self.run('[ -d "'+dir+'" ] && echo "True" || echo "False"', cmd=True, return_output=True)
+        if 'True' in output: return True 
+        else: return False
+        
 
     def terminate(self): 
         '''Terminate the instance'''

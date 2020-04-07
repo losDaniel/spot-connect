@@ -54,8 +54,7 @@ def launch_efs(system_name, region='us-west-2', launch_wait=3):
                 sys.stdout.flush() 
                 time.sleep(launch_wait)
 
-        sys.stdout.write('Detected')
-        sys.stdout.flush()  
+        print('Detected')
 
     else: 
         print('...EFS file system already exists')
@@ -145,8 +144,7 @@ def retrieve_efs_mount(file_system_name, instance, new_mount=False, region='us-w
                 sys.stdout.flush() 
                 time.sleep(mount_wait)
 
-        sys.stdout.write('Detected')
-        sys.stdout.flush() 
+        print('Detected')
 
     else: 
         mount_target = mount_targets[0]
