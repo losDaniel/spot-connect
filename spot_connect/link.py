@@ -218,7 +218,7 @@ class LinkAWS:
         print('Use the following to check progress: <SpotInstance("downloader_'+didx+'")>.run("'+instance_path+'/download_'+didx+'.txt", cmd=True)')
         
 
-    def clone_repo(self, instance, repo_link, target_folder, directory='/home/ec2-user/efs/'):
+    def clone_repo(self, instance, repo_link, directory='/home/ec2-user/efs/'):
         '''
 		Clone a git repo to the instance. Must specify a directory and target folder on the instance. This is so that organization on the instance is actively tracked by the user. 
 
@@ -227,12 +227,11 @@ class LinkAWS:
 		parameters
 		- instance : spotted.SpotInstance. The specific instance in which to clone the repo 
 		- repo_link : str. Git repo link. The command executed is: git clone <repo_link> <path>
-		- target_folder : str. Name of the folder to store the repo in, folder will be created in the given directory
 		- directory : str. Instance directory to place the target folder and git repo. If directory is '.' target folder will be created in the home directory. To view the home directory for a given instance use the LinkAWS.get_instance_home_directory method
 		'''
         proceed = instance.dir_exists(directory)
         if proceed:				
-            instance.run('git clone '+repo_link+'', cmd=True)
+            instance.run('cd '+directory+'\ngit clone '+repo_link+'', cmd=True)
         else:
             raise Exception(str(directory)+' directory was not found on instance')
             
@@ -253,7 +252,7 @@ class LinkAWS:
             command +='cd '+instance_path+'\n'
             command +='git checkout '+branch+'\n'
             if repo_link is None:
-                command+='git pull origin/'+branch+'\n'
+                command+='git pull origin '+branch+'\n'
             else:
                 command+='git pull '+repo_link+'\n'
             instance.run(command, cmd=True)
@@ -261,7 +260,8 @@ class LinkAWS:
             raise Exception(str(instance_path)+' path was not found on instance')
             
     def run_distributed_jobs(self, prefix, n_jobs, scripts, profile, filesystem=None, uploads=None, upload_path='.'):
-
+        '''Distribute scripts and workloads across a given number of instances with a given profile'''
+        
         if filesystem is not None: 
             fs = filesystem
         else: 
@@ -278,85 +278,13 @@ class LinkAWS:
             except: 
                 raise Exception('If uploading material to each instance, must provide an equal number of materials and instances')
                 
-        for nn in range(len(n_jobs)): 
+        for nn in range(n_jobs): 
 
             self.launch_instance(prefix+'_'+str(nn), profile=profile, filesystem=fs)
 
             if uploads is not None: 
-                self.instances[prefix+'_'+str(nn)].upload(uploads[nn],)
+                self.instances[prefix+'_'+str(nn)].upload(uploads[nn], upload_path)
 
             self.instances[prefix+'_'+str(nn)].run(scripts[nn], cmd=True)            		
             
             clear_output(wait=True)
-
-
-
-
-
-
-#
-#
-#    def set_distributed_apr(self, nickname, strategy='ABCDH', database='/home/ec2-user/efs/database/', resultpath='/home/ec2-user/efs/ABCDH/', overwrite='False'):
-#        '''Modify the set_apr.sh script to accomodate whatever variables we need'''
-#        
-#        with open(self.awsdir+'/set_apr_template.sh', 'r') as f: 
-#            txt = f.read()
-#            txt = txt.replace('STRATEGYNAME',strategy)
-#            txt = txt.replace('DATABASE',database)
-#            txt = txt.replace('RESULTPATH',resultpath)
-#            # The findPatterns method in strategy miner will create a PERMNICKNAME folder in the RESULTPATH
-#            txt = txt.replace('PERMNICKNAME', nickname)
-#            txt = txt.replace('OVERWRITEOPT', overwrite)
-#            txt = txt.replace('OUTPUT', 'Log_'+nickname+'.txt')
-#    
-#        with open(self.awsdir+'/set_apr.sh', 'w') as w: 
-#            w.write(txt)
-#            w.close()
-          
-
-
-    # DEPRECATED - run_s3_upload has been removed in favor of awscli methods which can be run through bash scripts
-#    def uploadDatabaseToS3(self, bucket='day-trader', database='D:/Day-Trader/database', overwrite=False): 
-#        '''Upload the database in the local path the given S3 bucket'''
-#        bucket = bucket.lower()
-#        run_s3_upload.upload_to_s3(bucket, database, overwrite)
-        
-    # DEPRECATED - run_s3_upload has been removed in favor of awscli methods which can be run through bash scripts
-#    def downloadDatabaseToEFS(self, efs_path='/home/ec2-user/efs/database', bucket_name='day-trader', overwrite=False, instance_name='efs_downloader'):
-#        '''
-#        Create an instance to download the database to the EFS. 
-#        The instance will terminate automatically when the job is done
-#        Check on the status using the monitor: self.monitor.run('cat efs/database/download.txt', cmd=True)
-#        __________
-#        parameters
-#        - efs_path : str. the directory in the EFS where you want to replicate the S3 structure 
-#        - instance_name : str. if the instance fails to connect submit a new name (check if any old keys are present in your awsdir)
-#        - instance_profile : str. instance profile to grant the ec2 a role that can access S3
-#        '''
-#        bucket_name = bucket_name.lower()
-#        instance = spotted.spotted(instance_name, profile='t3.small', filesystem=self.efs, kp_dir=self.kp_dir)
-#        
-#        # Upload the script that we want in the EFS directory where the S3 file structure will be immitated
-#        instance.upload(self.awsdir+'/run_s3_download.py', efs_path)
-#        
-#        txt = open(self.awsdir+'/s3_efs_transfer.sh', 'r').read()
-#        self.substitute_in_bash_script('DIRECTORY', efs_path, self.awsdir+'/s3_efs_transfer.sh')
-#        self.substitute_in_bash_script('BUCKETNAME', bucket_name, self.awsdir+'/s3_efs_transfer.sh')
-#        self.substitute_in_bash_script('OVERWRITE', str(overwrite), self.awsdir+'/s3_efs_transfer.sh')
-#                
-#        # Run the commands in this LOCAL file to download all the S3 files onto the EFS 
-#        instance.run(self.awsdir+'/s3_efs_transfer.sh')
-#        
-#        with open(self.awsdir+'/s3_efs_transfer.sh', 'w') as f:
-#            f.write(txt)
-#            f.close()
-            
-    ### DEPRECATED - Its exponentially faster to use AWS CLI functions such as >> aws sycn s3 s3://day-trader local_file
-#    def downloadFromS3(self, bucket='day-trader', database='D:/Day-Trader/database', overwrite=False):
-#        '''Download the Strategy data from the S3 bucket to the local path'''
-#        bucket = bucket.lower()
-#        wd = os.getcwd()
-#        os.chdir(database)
-#        run_s3_download.s3_download(bucket, overwrite)
-#        os.chdir(wd)
-

@@ -8,7 +8,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup( 
 	name='spot-connect',
-	version='1.0.1',
+	version='1.0.2',
 	description='A package to create and manage AWS resources, centered around EC2 spot-instances',
 	long_description=long_description,
 	long_description_content_type='text/markdown',

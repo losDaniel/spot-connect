@@ -331,12 +331,7 @@ class SpotInstance:
         output = self.run('[ -d "'+dir+'" ] && echo "True" || echo "False"', cmd=True, return_output=True)
         if 'True' in output: return True 
         else: return False
-    
-
-    def open_shell(self, port=22):
-        '''Open an active shell. --Only works when run from the command prompt--'''
-        methods.active_shell(self.instance, self.profile['username'], kp_dir=self.kp_dir)
-    
+        
 
     def terminate(self): 
         '''Terminate the instance'''

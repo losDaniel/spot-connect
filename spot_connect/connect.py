@@ -51,6 +51,7 @@ def main():                                                     # Main execution
     parser.add_argument('-a', '--activeprompt', help='If "True" leave an active shell open after running scripts', default=False)
     parser.add_argument('-t', '--terminate', help='Terminate the instance after running everything', default=False)
     parser.add_argument('-m', '--monitoring', help='Activate monitoring for the instance', default=True)
+    parser.add_argument('-em','--efsmount', help='if True, will connect or create a filesystem', default=True)
     parser.add_argument('-nm','--newmount', help='Create a new mount target even if one exists', default=False)
     parser.add_argument('-ip','--instanceprofile', help='Instance profile with attached IAM roles', default='')
     args = parser.parse_args()
@@ -82,6 +83,9 @@ def main():                                                     # Main execution
     except Exception as e:
         raise e
         sys.exit(1)
+
+    if not args.efsmount:
+        profile['efs_mount'] = False
 
     if profile['efs_mount']: 
         
