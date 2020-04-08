@@ -101,7 +101,7 @@ def main():                                                     # Main execution
             fs_name = args.filesystem                                          
 
             try:                                                               # Create and/or mount an EFS to the instance 
-                mount_target, instance_dns, filesystem_dns = elastic_file_systems.retrieve_efs_mount(fs_name, instance, new_mount=args.newmount)
+                mount_target, instance_dns, filesystem_dns = elastic_file_systems.retrieve_efs_mount(fs_name, instance, new_mount=args.newmount, region=profile['region'])
             except Exception as e: 
                 raise e 
                 sys.exit(1)        

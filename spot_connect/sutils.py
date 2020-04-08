@@ -13,7 +13,8 @@ spotted class which can be run from a notebook or python script
 MIT License 2020
 """
 
-import os, ast, boto3, random, string
+import os, ast, boto3, random, string, pprint
+
 from path import Path 
 
 
@@ -47,15 +48,16 @@ def default_region():
     profiles = load_profiles()
     print(profiles['default']['region'])       
 
-def save_profiles(profile_str):
+
+def save_profiles(profiles):
     '''Save the profile dict str in a .txt file'''
     profile_file = [f for f in list(absoluteFilePaths(pull_root())) if f.split('\\')[-1]=='profiles.txt'][0]    
     
     #ptosave = ast.literal_eval(profile_str)
+    print(profile_file)
 
     with open(profile_file,'w') as f:
-        #f.write(json.dumps(ptosave, ensure_ascii=True))
-        f.write(profile_str)
+        f.write(pprint.pformat(profiles))
         f.close()
 
 def change_default_region(region, deactive_warning=True): 
@@ -65,10 +67,10 @@ def change_default_region(region, deactive_warning=True):
             raise Exception('User exit')
 
     profiles = load_profiles()
-    str_profiles = str(profiles)
-    str_profiles = str_profiles.replace(profiles['default']['region'], region)
-#    print(str_profiles)
-    save_profiles(str_profiles)
+    for k in profiles: 
+        profiles[k]['region'] = region
+
+    save_profiles(profiles)
 
 
 def change_default_image(image, deactive_warning=True): 
@@ -78,10 +80,10 @@ def change_default_image(image, deactive_warning=True):
             raise Exception('User exit')
 
     profiles = load_profiles()
-    str_profiles = str(profiles)
-    str_profiles = str_profiles.replace(profiles['default']['image_id'], image)
-#    print(str_profiles)
-    save_profiles(str_profiles)
+    for k in profiles: 
+        profiles[k]['image_id'] = image
+
+    save_profiles(profiles)
 
 
 def show_instances(): 
