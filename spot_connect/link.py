@@ -108,7 +108,6 @@ class LinkAWS:
                                         )
         self.instances[name] = instance
 
-
     def launch_monitor(self, instance_name='monitor', profile='default'):
         '''
         Will launch the cheapest possible instance to use as a monitor. 
@@ -154,21 +153,18 @@ class LinkAWS:
     	output = itc.run('pwd', cmd=True, return_output=True)
     	return output 
 
-    def instance_s3_transfer(self, source, dest, efs=None, instance_profile=None):
+    def instance_s3_transfer(self, source, dest, instance_profile, efs=None, instance_name=None):
         '''
     	Will launch a new instance to transfer files from an S3 bucket to an instance or vice-versa. 
-    
     	The instance folder must include the home directory path such as "/home/ec2-user/<path>". 
-    
     	If you do not know the home directory path for an instance use the link.LinkAWS.get_instance_home_directory() method.
-    		
-    		The bucket must be of the format "s3://<bucket_name>"
-    		__________
-    		parameters
-    		- source : str. path to an instance folder (usually starts with "/home/ec2-user/") or bucket of the form s3://<bucket name>
-    		- dest : str. path to an instance folder (usually starts with "/home/ec2-user/") or bucket of the form s3://<bucket name>
-    		- efs : str. Name for the elastic file system to mount on the instance, if None will attempt to use default, if none has been set will prompt the user for continue. 
-    		- instance_profile : str. instance profile to use for the instance, this is necessary to grant the instance access to S3. If None, default will be used. 
+		The bucket must be of the format "s3://<bucket_name>"
+		__________
+		parameters
+		- source : str. path to an instance folder (usually starts with "/home/ec2-user/") or bucket of the form s3://<bucket name>
+		- dest : str. path to an instance folder (usually starts with "/home/ec2-user/") or bucket of the form s3://<bucket name>
+		- efs : str. Name for the elastic file system to mount on the instance, if None will attempt to use default, if none has been set will prompt the user for continue. 
+		- instance_profile : str. instance profile to use for the instance, this is necessary to grant the instance access to S3. If None, default will be used. 
         '''
         
         if efs is None:
@@ -184,7 +180,13 @@ class LinkAWS:
             fs = efs
             
         didx = genrs()
-        self.downloader = spotted.SpotInstance('downloader_'+didx, profile='t3.small', filesystem=fs, kp_dir=self.kp_dir)
+
+        if instance_name is None: 
+            iname = 'downloader_'+didx
+        else: 
+            iname = instance_name
+            
+        self.downloader = spotted.SpotInstance(iname, profile='t3.small', filesystem=fs, kp_dir=self.kp_dir, instance_profile=instance_profile)
         
         if 's3://' in source: 
             instance_file_exists, instance_path, bucket_path = self.downloader.dir_exists(dest), dest, source 
@@ -205,17 +207,17 @@ class LinkAWS:
         else: 
 	        command = ''
 	        # Run the aws s3 sync command in the background and send the output to download_<didx>.txt
-	        command +='nohup aws s3 sync '+source+' '+dest+' &> download_'+didx+'.txt &\n'
+	        command +='nohup aws s3 sync '+source+' '+dest+' &> '+instance_path+'/'+iname+'.txt &\n'
 	        # Get the job id for the last command
 	        command +='curpid=$!\n'
 	        # When the job with the given job id finishes, shut down and terminate the instance  
-	        command +="nohup sh -c 'while ps -p $0 &> /dev/null; do sleep 10 ; done && sudo shutdown -h now ' $curpid &> run.txt &\n"
+	        command +="nohup sh -c 'while ps -p $0 &> /dev/null; do sleep 10 ; done && sudo shutdown -h now ' $curpid &> s3_transfer.txt &\n"
 
         self.downloader.run(command, cmd=True)
 
-        print('Files and directories from '+source+' are being is being synced to '+dest+' on the instance downloader_'+didx) 
+        print('Files and directories from '+source+' are being is being synced to '+dest+' on the instance "'+iname+'"') 
         print('The instance will be shutdown and terminated when the job is complete.')
-        print('Use the following to check progress: <SpotInstance("downloader_'+didx+'")>.run("'+instance_path+'/download_'+didx+'.txt", cmd=True)')
+        print('Use the following to check progress: SpotInstance("'+iname+'").run("cat '+instance_path+'/'+iname+'.txt", cmd=True)')
         
 
     def clone_repo(self, instance, repo_link, directory='/home/ec2-user/efs/'):

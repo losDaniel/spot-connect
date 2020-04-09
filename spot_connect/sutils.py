@@ -18,6 +18,11 @@ import os, ast, boto3, random, string, pprint
 from path import Path 
 
 
+def chunks(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
 def genrs(length=10):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
@@ -48,7 +53,6 @@ def default_region():
     profiles = load_profiles()
     print(profiles['default']['region'])       
 
-
 def save_profiles(profiles):
     '''Save the profile dict str in a .txt file'''
     profile_file = [f for f in list(absoluteFilePaths(pull_root())) if f.split('\\')[-1]=='profiles.txt'][0]    
@@ -72,7 +76,6 @@ def change_default_region(region, deactive_warning=True):
 
     save_profiles(profiles)
 
-
 def change_default_image(image, deactive_warning=True): 
     if not deactive_warning:
         ans = input('Warning: doing this will change the "image_id" for all profiles. Continue?(y): ')
@@ -84,7 +87,6 @@ def change_default_image(image, deactive_warning=True):
         profiles[k]['image_id'] = image
 
     save_profiles(profiles)
-
 
 def show_instances(): 
     client = boto3.client('ec2', region_name='us-west-2')
@@ -116,5 +118,3 @@ def set_default_kp_dir(directory : str):
         f.write(directory)
         f.close()
     print('Default path has been set to '+kpfile)    
-
-
