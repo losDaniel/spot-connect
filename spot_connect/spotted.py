@@ -87,7 +87,7 @@ class SpotInstance:
         self.name = name 
         self.client = None 
         
-        print('Loading profiles, you can edit profiles in '+str(profile))
+        print('Loading profiles, you can edit profiles in '+str(root))
         
         self.profile = None         
         if profile is None: 

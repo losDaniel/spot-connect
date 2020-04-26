@@ -268,6 +268,7 @@ class LinkAWS:
             fs = filesystem
         else: 
             fs = self.efs
+            
 
         try: 
             assert len(scripts) == n_jobs
@@ -282,7 +283,7 @@ class LinkAWS:
                 
         for nn in range(n_jobs): 
 
-            self.launch_instance(prefix+'_'+str(nn), profile=profile, filesystem=fs)
+            self.launch_instance(prefix+'_'+str(nn), profile=profile, filesystem=fs, efs_mount=None, new_mount=None)
 
             if uploads is not None: 
                 self.instances[prefix+'_'+str(nn)].upload(uploads[nn], upload_path)
@@ -290,3 +291,4 @@ class LinkAWS:
             self.instances[prefix+'_'+str(nn)].run(scripts[nn], cmd=True)            		
             
             clear_output(wait=True)
+            print('Job %s Launched' % str(nn))
