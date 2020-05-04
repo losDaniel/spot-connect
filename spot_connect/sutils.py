@@ -13,7 +13,7 @@ spotted class which can be run from a notebook or python script
 MIT License 2020
 """
 
-import os, ast, boto3, random, string, pprint
+import os, ast, boto3, random, string, pprint, glob
 
 from path import Path 
 
@@ -40,7 +40,7 @@ def pull_root():
 def load_profiles():
     '''Load the profiles from the package profile.txt file'''
     
-    profile = [f for f in list(absoluteFilePaths(pull_root())) if f.split('\\')[-1]=='profiles.txt'][0]    
+    profile = [f for f in list(absoluteFilePaths(pull_root()+'/data/')) if f.split('\\')[-1]=='profiles.txt'][0]    
     
     with open(profile,'r') as f:
         profiles = ast.literal_eval(f.read())
@@ -55,7 +55,7 @@ def default_region():
 
 def save_profiles(profiles):
     '''Save the profile dict str in a .txt file'''
-    profile_file = [f for f in list(absoluteFilePaths(pull_root())) if f.split('\\')[-1]=='profiles.txt'][0]    
+    profile_file = [f for f in list(absoluteFilePaths(pull_root()+'/data/')) if f.split('\\')[-1]=='profiles.txt'][0]    
     
     #ptosave = ast.literal_eval(profile_str)
     print(profile_file)
@@ -100,7 +100,7 @@ def printTotals(transferred, toBeTransferred):
 
 def get_package_kp_dir():
     '''Get the key-pair directory'''
-    kpfile = [f for f in list(absoluteFilePaths(pull_root())) if f.split('\\')[-1]=='key_pair_default_dir.txt'][0]    
+    kpfile = [f for f in list(absoluteFilePaths(pull_root()+'/data/')) if f.split('\\')[-1]=='key_pair_default_dir.txt'][0]    
     with open(kpfile,'r') as f: 
         default_path = f.read()
         f.close()
@@ -113,8 +113,18 @@ def get_default_kp_dir():
 
 def set_default_kp_dir(directory : str): 
     '''Set the default key pair directory'''
-    kpfile = [f for f in list(absoluteFilePaths(pull_root())) if f.split('\\')[-1]=='key_pair_default_dir.txt'][0]    
+    kpfile = [f for f in list(absoluteFilePaths(pull_root()+'/data/')) if f.split('\\')[-1]=='key_pair_default_dir.txt'][0]    
     with open(kpfile,'w') as f: 
         f.write(directory)
         f.close()
     print('Default path has been set to '+kpfile)    
+
+def clear_key_pairs():
+    '''Erase all the key pairs in the kp_directory'''
+    answer = input('You are about to erase all the locally stored key pairs.\nYou will have to erase the matching key board through the AWS dashboard. Conitnue? (Y)')
+
+    if answer == 'Y':
+        for f in glob.glob(get_default_kp_dir()+'/*'):
+            os.remove(f)
+    else: 
+        raise Exception('User exit')

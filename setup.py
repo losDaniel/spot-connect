@@ -25,6 +25,6 @@ setup(
 	},
 	install_requires=['boto3','netaddr','paramiko','path'],
 	python_requires='>=3.7',
-	package_data={'spot_connect':['key_pair_default_dir.txt','profiles.txt','regional_images.txt']},
+	package_data={'spot_connect':['data/key_pair_default_dir.txt','data/profiles.txt','data/ami_data.csv','data/spot_instance_pricing.csv']},
 	include_package_data=True,
 )
