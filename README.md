@@ -277,7 +277,7 @@ Images or AMIs are the pre-set configurations available for instances. To my kno
 
 <br> 
 
-## [Instance Profiles]((https://docs.aws.amazon.com/codedeploy/latest/userguide/getting-started-create-iam-instance-profile.html)
+## [Instance Profiles](https://docs.aws.amazon.com/codedeploy/latest/userguide/getting-started-create-iam-instance-profile.html)
 
 Instance profiles are rolls that you can create and assign to instances in order to grant them access to other AWS resources such as S3. Read more about what they are and how to use them in [this link](https://docs.aws.amazon.com/codedeploy/latest/userguide/getting-started-create-iam-instance-profile.html). 
 
