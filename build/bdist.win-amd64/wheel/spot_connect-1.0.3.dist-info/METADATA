@@ -1,3 +1,20 @@
+Metadata-Version: 2.1
+Name: spot-connect
+Version: 1.0.3
+Summary: A package to create and manage AWS resources, centered around EC2 spot-instances
+Home-page: https://github.com/losDaniel/spot-connect.git
+Author: Carlos Valcarcel
+Author-email: carlos.d.valcarcel.w@gmail.com
+License: MIT
+Keywords: aws ec2 cloud ssh machinelearning virtualmachine
+Platform: UNKNOWN
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
+Requires-Dist: boto3
+Requires-Dist: netaddr
+Requires-Dist: paramiko
+Requires-Dist: path
+
 # [Spot Connect](https://pypi.org/project/spot-connect/)
 
 	pip install spot-connect
@@ -38,7 +55,7 @@ Using this module users may:
 **Warning**:
 
 Because spot instances rely on excess capacity they can be requisitioned by Amazon when demand increases, this gives users a 2 minute window to close their session and abandon the spot instance, forcing any unfinished work to resume on another spot instance should that be the user's choice. Read more about this in the **Suggested Project Guidelines** section below. 
- 	
+
 <br>
 
 ## Command Line Argument
@@ -305,3 +322,4 @@ instance_profile.add_role(RoleName='full_s3_access')
 In the above block of code we create an instance profile names "ec2_and_s3" and assign it the access role "full_s3_access" which I created earlier through the dashboard. 
 
 You know an instance has successfully been granted access because if you open a prompt to the instance and type `aws configure` your keys will already be filled. 
+

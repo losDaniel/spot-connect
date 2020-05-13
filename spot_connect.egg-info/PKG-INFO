@@ -6,30 +6,23 @@ Home-page: https://github.com/losDaniel/spot-connect.git
 Author: Carlos Valcarcel
 Author-email: carlos.d.valcarcel.w@gmail.com
 License: MIT
-Description: # Spot Connect
+Description: # [Spot Connect](https://pypi.org/project/spot-connect/)
         
         	pip install spot-connect
         
-        <br>
-        
         ## Dependencies 
-        
         
         	pip install awscli
         
-        <br>
         The only dependency that MUST be installed by the user is the `awscli`. Once the awscli (AWS command line interface) has been installed you must configure it by typing: 
+        <br>
         
         	aws configure
         
-        <br> 
-        then enter your credentials and default region. 
-        <br>
-        This will make sure that any connection requests you make to AWS are automatically directed to your account without needing to enter any sort of login credentials. 
+        then enter your credentials and default region. This will make sure that any connection requests you make to AWS are automatically directed to your account without needing to enter any sort of login credentials. 
         
         Go to [this link](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html) for a more detailed explanation of `aws configure`. 
         
-        <br>
         The rest of the package dependencies are installed automatically, these include `boto3`, `netaddr`, `paramiko` and `path` 
         
         <br>
@@ -47,6 +40,8 @@ Description: # Spot Connect
         - using a command prompt, open a prompt that is directly linked to any running instance 
         
         - perform a number of other essential tasks such as executing scripts and commands, uploading data directly to an instance, transfer data from S3 to EFS and back, and more. 
+        
+        <br> 
         
         **Warning**:
         
@@ -69,18 +64,23 @@ Description: # Spot Connect
         Below are some of the more useful options available from the command line:
         
         <br>
+        
         __*Name*__ `-n` for the spot instance, a key and security group will be created for the instance with this name. The private key will be saved to the directory in a .pem file. 
         
         <br>
-        __*Profile*__ `-p` dictionary of parameters that describe the instance to be launched, the list of predefined profiles can be viewed using `spot_connect.sutils.load_profiles()`. 
+        
+        __*Profile*__ `-n` dictionary of parameters that describe the instance to be launched, the list of predefined profiles can be viewed using `spot_connect.sutils.load_profiles()`. 
         
         <br>
+        
         __*Script*__ `-s` path or list of paths to scripts to be executed. If you're running linux os on your instance these should be bash scripts. 
         
         <br>
+        
         __*Filesystem*__ `-f` creation token name. The `--efsmount` option must be set to True for this to have an effect. The name of the filesystem you want to connect to, if it does not exist one will be created and connected to. 
         
         <br>
+        
         __*Upload*__ `-u` is the file path or directory that will be uploaded via paramiko ssh transfer. Upload speed depends only on internet speed and not instance type. **
         
         *Example for upload files*:
@@ -89,6 +89,7 @@ Description: # Spot Connect
         	-u C:\Data\file_1.txt,C:\MapData\file_2.zip  #uploading a list of files 
         
         <br>
+        
         __*Remotepath*__ `-r` is the directory on the EC2 instance to upload the files in the `-u` (upload) option to. 
         
         *Syntax for remotepath*:
@@ -96,19 +97,24 @@ Description: # Spot Connect
         	-r /home/ec2-user/efs/data  
         
         <br>
+        
         __*Activeprompt*__ `-a` is a boolean (`True` or `False`) for whether to leave an active shell connected to the instance after the scripts have finished running (if your instance has a linux ami, for example, this will be a linux shell).
         
         <br>
+        
         __*Terminate*__ `-t` is a boolean. If "True" the instance specified in the `-n` (name) argument will be terminated and nothing else will be done (*Terminate* overrides all other arguments). This is basically a remote shutdown command. 
         
         <br>
+        
         __*Monitoring*__ `-m` if set to True will activate cloudwatch monitoring for the instance. 
         
         <br> 
+        
         __*Instanceprofile*__ `-ip` attaches a given instance profile to your instance to grant it access to other **AWS** services. See the **Instance Profiles** section below. 
         
         
         <br> 
+        
         **Launching vs. reconnecting to an instance**
         
         The settings that may only be defined at the moment you launch an instance are: 
@@ -120,15 +126,14 @@ Description: # Spot Connect
         
         	spot_connect -n VM1 -p t3.small -m True -ip role1
         
-        <br> 
         Once an instance is launched with these settings they are fixed and do not need to be defined again when connecting, such that I could open a prompt onto the instance using:
         
         	spot_connect -n VM1 -a True
         
-        <br> 
         and the instance would already be on a t3 processor with monitoring enabled and the instance_profile "role1" 
         
         <br> 
+        
         __Changing these specific settings after an instance has been created can be done but has not been incorporated into this module because, given the temporary nature of spot instances, relaunching the instance is an easier alternative.__ 
         
         <br> 
@@ -137,46 +142,45 @@ Description: # Spot Connect
         
         	from spot_connect.spotted import SpotInstance
         
-        <br> 
         The `SpotInstance` class can be run from scripts and notebooks and has all the same functionality of the command line tool. 
         
         	my_instance = SpotInstance('VM1', profile="t3.small", monitoring=True, instance_profile="role1")
         
-        <br> 
+        
         The `my_instance` variable instantiated above would connect to or create an instance called "VM1" with profile "t3.small," cloudwatch monitoring enables and instance profile "role1."
         
-        <br> 
-        The `SpotInstance` class even lets you define some of the profile settings directly such as,*image_id*, *instance_type*, *price*, *region*, and *firewall* (firewall settings). It even lets you specify some more detailed options such as the *key_pair*, *kp_dir* (key-pair directory), and *sec_group* (security group). 
+        The `SpotInstance` class even lets you define some of the profile settings directly such as,*image_id*, *instance_type*, 
+        *price*, *region*, and *firewall* (firewall settings). It even lets you specify some more detailed options such as the *key_pair*, *kp_dir* (key-pair directory), and *sec_group* (security group). 
         
         __*The only option that is available in the command line and NOT available through the `spotted` module is `activeprompt`.*__ 
         
         The `SpotInstance` class does provide other functionality that makes it easierto work with: 
         
-        <br> 
+        
         **`upload`**: upload files from a local directory directly to the instance. 
         
         	my_instance.upload(files, remotepath)
         
-        <br> 
+        
         **`download`**: download files from the instance to a local directory 
         
         	my_instance.download(files, localpath)
         
-        <br> 
+        
         **`run`**: run scripts or commands on the instance. 
         
         	my_instance.run('my_script.sh') # Runs a script called my_script.sh
         	my_instance.run('ls', cmd=True) # Runs the "ls" command on the instance and prints out the directory of the home folder.
         
-        <br> 
+        
         Scripts can be converted into strings where each command is separated by a "\n" character to avoid creating files. For example: 
         
         	my_instance.upload('C://list_efs_files.py', '/home/ec2-user/efs/')
         	results = my_instance.run('cd efs\n python list_efs_files.py', cmd=True, return_output=True) 
         
-        <br> 
-        The first line uploads a python script to the "efs" directory where my elastic file system is mounted.
-        The second line changes the working direcotry to the "efs" direcotry and then runs the python file I just uploaded. The `cmd` option tells the `run` method that I've submitted a command and not a script, the `return_output` option redirects any printed output to the "results" variable. 
+        The first line uploads a python script to the "efs" directory where my elastic file system is mounted. The second line changes the working direcotry to the "efs" direcotry and then runs the python file I just uploaded. The `cmd` option tells the `run` method that I've submitted a command and not a script, the `return_output` option redirects any printed output to the "results" variable. 
+        
+        <br>
         
         ## LinkAWS Class
         
@@ -186,33 +190,32 @@ Description: # Spot Connect
         
         	my_link = LinkAWS()
         
-        <br> 
+        
         This provides useful functionality that makes working with the entire `spot_connect` module much easier, for example:
         
-        <br> 
+        
         **`launch_instance`** : Launch a spot instance and store it in the `LinkAWS.instances` dict attribute.
         
-        <br> 
+        
         **`instance_s3_transfer`** : Will launch a new instance to transfer files from an S3 bucket to an instance or vice-versa. An instance profile with S3 access must be defined otherwise an error will be returned. See section on instance profiles below. 
         
-        <br> 
+        
         **`clone_repo`**, **`update_repo`** : Clone/update a git repo on the instance. 
         
-        <br> 
+        
         **`run_distributed_jobs`** : Distribute scripts and workloads across a given number of instances with a given profile
         
-        <br> 
+        
         The `LinkAWS` class also provides shortcuts for some utility functions such as: 
         
-        <br> 
+        
         **`get_instance_home_directory`** : prints the home directory for a given instance so the user can specify instance paths easily. 
         
-        <br> 
+        
         **`count_cores`** : prints the number physical and logical cores on a given instance.
         
-        <br> 
-        **`list_profiles`** : same as `spot_connect.sutils.load_profiles()`
         
+        **`list_profiles`** : same as `spot_connect.sutils.load_profiles()`
         
         <br>
         
@@ -235,16 +238,17 @@ Description: # Spot Connect
         There is really no need to change any of the other settings in the any of the profiles listed in "profiles.txt"
         
         <br>
+        
         **Changing Profile Region & AMI**:
         
         	from spot_connect import sutils
         	sutils.reset_profiles(price_increase=1.15) 
         
-        <br>
+        
         The `sutils.reset_profiles` prompts users to select a region and image which are then used to populate profiles for every instance type available in that region at `price_increase` times the instance price. 
         
-        AMI Ids and spot instance pricing changes by region. This module scraped the prices and image IDs for every region using the [amazon_price_and_image_scraper.ipynb](https://github.com/losDaniel/spot-connect/blob/master/amazon_price_and_image_scraper.ipynb) notebook and saved this data to "ami_data.csv" and "spot_instance_pricing.csv" files. 
         
+        AMI Ids and spot instance pricing changes by region. This module scraped the prices and image IDs for every region using the [amazon_price_and_image_scraper.ipynb](https://github.com/losDaniel/spot-connect/blob/master/amazon_price_and_image_scraper.ipynb) notebook and saved this data to "ami_data.csv" and "spot_instance_pricing.csv" files. 
         
         <br> 
         
@@ -281,7 +285,7 @@ Description: # Spot Connect
         
         <br> 
         
-        ## Instance Profiles 
+        ## [Instance Profiles]((https://docs.aws.amazon.com/codedeploy/latest/userguide/getting-started-create-iam-instance-profile.html)
         
         Instance profiles are rolls that you can create and assign to instances in order to grant them access to other AWS resources such as S3. Read more about what they are and how to use them in [this link](https://docs.aws.amazon.com/codedeploy/latest/userguide/getting-started-create-iam-instance-profile.html). 
         
