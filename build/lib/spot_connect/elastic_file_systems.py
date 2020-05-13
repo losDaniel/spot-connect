@@ -150,6 +150,9 @@ def retrieve_efs_mount(file_system_name, instance, new_mount=False, region='us-w
         mount_target = mount_targets[0]
     
     instance_dns = instance['PublicDnsName']
+    print('Region',region)
+    print('FSID', file_system_id)
+    
     filesystem_dns = file_system_id+'.efs.'+region+'.amazonaws.com'
             
     return mount_target, instance_dns, filesystem_dns

@@ -7,10 +7,9 @@ spot_connect/core_count.py
 spot_connect/elastic_file_systems.py
 spot_connect/instances.py
 spot_connect/interactive.py
-spot_connect/key_pair_default_dir.txt
 spot_connect/link.py
 spot_connect/methods.py
-spot_connect/profiles.txt
+spot_connect/s3methods.py
 spot_connect/spotted.py
 spot_connect/sutils.py
 spot_connect.egg-info/PKG-INFO

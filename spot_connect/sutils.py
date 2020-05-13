@@ -13,10 +13,10 @@ spotted class which can be run from a notebook or python script
 MIT License 2020
 """
 
-import os, ast, boto3, random, string, pprint, glob
-
+import os, ast, boto3, random, string, pprint, glob, re
+import pandas as pd 
 from path import Path 
-
+from IPython.display import clear_output
 
 def chunks(lst, n):
     """Yield successive n-sized chunks from lst."""
@@ -128,3 +128,89 @@ def clear_key_pairs():
             os.remove(f)
     else: 
         raise Exception('User exit')
+
+
+def find_username(s):
+    for k in username_dictionary:
+        ios = re.findall('('+k+')',s)
+        if len(ios)>0:
+            ios = username_dictionary[ios[0]]
+            break
+        
+    
+    return ios
+
+
+def select_region():
+    for i,r in enumerate(ami_data['region'].unique()): print(i,r)
+    region_idx = int(input('Enter the number of the region you want to set the profiles to'))
+    region = list(ami_data['region'].unique())[region_idx]    
+    clear_output()    
+    return region 
+
+
+def select_image(region):
+    image_list = ami_data.loc[ami_data['region']==region, 'image_name']
+    for i,r in enumerate(image_list):print(i,r)
+    image_idx = int(input('Enter the number of the image you want to set the profiles to'))
+    image_id = list(ami_data.loc[ami_data['region']==region, 'image_id'])[image_idx]    
+    image_name =list(ami_data.loc[ami_data['region']==region, 'image_name'])[image_idx]    
+    username = list(ami_data.loc[ami_data['region']==region, 'username'])[image_idx]    
+    clear_output()    
+    return image_id, image_name, username
+
+
+def add_profile(profile_dict, instance_type, image_id, image_name, bid_price, min_price, region, username):
+    profile_dict[instance_type]={
+        'efs_mount': True,
+        'firewall_ingress': ('tcp', 22, 22, '0.0.0.0/0'),
+        'image_id': image_id,
+        'image_name':image_name,
+        'instance_type': instance_type,
+        'price': bid_price,
+        'min_price':min_price,
+        'region': region,
+        'scripts': [],
+        'username': username
+    }
+    return profile_dict
+
+
+def reset_profiles(price_increase=1.15):
+    
+    assert price_increase >= 1
+    
+    region = select_region()
+    image_id, image_name, username = select_image(region)
+    
+    region_name = region.split(')')[0]+')'
+    region_code = region.split(')')[1]
+    spot_instance_pricing.loc[spot_instance_pricing['region']==region_name]
+
+    profile_dict = {}
+    for tup in spot_instance_pricing.itertuples():
+
+        if 'N/A' in tup.linux_price:
+            continue
+        instance_price = float(re.findall('([0-9]*\.[0-9]*)',tup.linux_price)[0])
+        bid_price = instance_price*price_increase
+
+        profile_dict = add_profile(profile_dict, 
+                                   tup.instance_type, 
+                                   image_id, 
+                                   image_name,
+                                   bid_price,
+                                   instance_price, 
+                                   region_code, 
+                                   username)
+
+    save_profiles(profile_dict)
+
+# Load the data needed for the module
+username_dictionary = {'Linux':'ec2-user',
+                       'Ubuntu':'ubuntu',
+                       'Windows':'ec2-user'}
+
+spot_instance_pricing = pd.read_csv(pull_root()+'/data/spot_instance_pricing.csv')
+ami_data = pd.read_csv(pull_root()+'/data/ami_data.csv')
+ami_data['username'] = ami_data['image_name'].apply(lambda s: find_username(s))

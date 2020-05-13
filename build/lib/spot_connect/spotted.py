@@ -87,7 +87,7 @@ class SpotInstance:
         self.name = name 
         self.client = None 
         
-        print('Loading profiles, you can edit profiles in '+str(profile))
+        print('Loading profiles, you can edit profiles in '+str(root))
         
         self.profile = None         
         if profile is None: 
@@ -153,7 +153,6 @@ class SpotInstance:
         self.region = None 
         if region is not None:
             self.profile['region']=region
-
         
         self.username = None 
         if username is not None:
@@ -197,7 +196,7 @@ class SpotInstance:
             
                 # Create and/or mount an EFS to the instance 
                 try:                                
-                    self.mount_target, self.instance_dns, self.filesystem_dns = elastic_file_systems.retrieve_efs_mount(fs_name, self.instance, new_mount=self.newmount)
+                    self.mount_target, self.instance_dns, self.filesystem_dns = elastic_file_systems.retrieve_efs_mount(fs_name, self.instance, new_mount=self.newmount, region=self.profile['region'])
                 except Exception as e: 
                     raise e 
                     sys.exit(1)        

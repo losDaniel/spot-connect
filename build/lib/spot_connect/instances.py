@@ -193,7 +193,7 @@ def launch_spot_instance(spotid,
         if instance_profile!='':
             launch_specs['IamInstanceProfile']= {                              # Define the IAM role for your instance 
                          'Name': instance_profile,                                       
-            },
+            }
 
         response = client.request_spot_instances(                              
             AvailabilityZoneGroup=profile['region'],
