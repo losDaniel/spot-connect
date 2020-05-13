@@ -37,7 +37,7 @@ Using this module users may:
 
 **Warning**:
 
-Because spot instances rely on excess capacity they can be requisitioned by Amazon when demand increases, this gives users a 2 minute window to close their session and abandon the spot instance, forcing any unfinished work to resume on another spot instance should that be the user's choice. Read more about this in the **Suggested Project Guidelines** section below. 
+Since spot instances rely on excess capacity, they can be requisitioned by Amazon when demand increases. When instances are requisitioned users get a 2 minute warning to close their session and abandon the spot instance, forcing any unfinished work to resume on another spot instance should that be the user's choice. Read more about how to deal with this in the **Suggested Project Guidelines** section below. 
  	
 <br>
 
@@ -48,7 +48,7 @@ Launching an instance is as easy as:
 	spot_connect -n instance_1 -p t2.micro -a True
 
 <br>
-This will create an instance that will appear with the name "instance_1" in you EC2 concole, it will launch it with the default profile and instance type and leave an open prompt that is connected to the instance on your command prompt. 
+This will create an instance that will appear with the name "instance_1" in you EC2 concole, it will launch it with the t2.micro profile and instance type and leave an open prompt that is connected to the instance on your command prompt. 
 
 
 `spot_connect` can be executed a command line to launch or reconnect to an instance, mount an elastic files system, upload files, execute scripts and leave an active shell connected to the instance open in your command line. 
@@ -61,7 +61,7 @@ __*Name*__ `-n` for the spot instance, a key and security group will be created 
 
 <br>
 
-__*Profile*__ `-n` dictionary of parameters that describe the instance to be launched, the list of predefined profiles can be viewed using `spot_connect.sutils.load_profiles()`. 
+__*Profile*__ `-p` dictionary of parameters that describe the instance to be launched, the list of predefined profiles can be viewed using `spot_connect.sutils.load_profiles()`. 
 
 <br>
 
