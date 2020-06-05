@@ -174,19 +174,19 @@ The first line uploads a python script to the "efs" directory where my elastic f
 
 <br>
 
-## LinkAWS Class
+## InstanceManager Class
 
-`from spot_connect.link import LinkAWS`
+`from spot_connect.instance_manager import InstanceManager`
 
-The `LinkAWS` class takes the `spotted` module one step further and provides the functionality for users to handle multiple spot instances and distribute workloads across these. 
+The `InstanceManager` class takes the `spotted` module one step further and provides the functionality for users to handle multiple spot instances and distribute workloads across these. 
 
-	my_link = LinkAWS()
+	my_link = InstanceManager()
 
 
 This provides useful functionality that makes working with the entire `spot_connect` module much easier, for example:
 
 
-**`launch_instance`** : Launch a spot instance and store it in the `LinkAWS.instances` dict attribute.
+**`launch_instance`** : Launch a spot instance and store it in the `InstanceManager.instances` dict attribute.
 
 
 **`instance_s3_transfer`** : Will launch a new instance to transfer files from an S3 bucket to an instance or vice-versa. An instance profile with S3 access must be defined otherwise an error will be returned. See section on instance profiles below. 
@@ -198,7 +198,7 @@ This provides useful functionality that makes working with the entire `spot_conn
 **`run_distributed_jobs`** : Distribute scripts and workloads across a given number of instances with a given profile
 
 
-The `LinkAWS` class also provides shortcuts for some utility functions such as: 
+The `InstanceManager` class also provides shortcuts for some utility functions such as: 
 
 
 **`get_instance_home_directory`** : prints the home directory for a given instance so the user can specify instance paths easily. 
@@ -223,7 +223,7 @@ The "profiles.txt" file only contains a dictionary with different instance spec 
 
 **image_id** : The default AMI is the deep learning image for Linux, this can be changed for every profile listed in "profiles.txt" using `spot_connect.sutils.change_default_image(<image id>)`
 
-**price** : Price is the maximum price you are willing to bid for an instance. For a list of spot-instance prices check [this link](https://aws.amazon.com/ec2/spot/pricing/). Price varies by region so make sure you edit these accordingly in "profile.txt" if you change regions. 
+**price** : Price is the maximum price you are willing to bid for an instance. For a list of spot-instance prices check [this link](https://aws.amazon.com/ec2/spot/pricing/). Price varies by region and can be changed accordingly using the `spot_connect.sutils` module. 
 
 **username** : Usually "ec2-user" but can depend on the instance AMI. For a list of default usernames see: https://alestic.com/2014/01/ec2-ssh-username/
 
@@ -291,17 +291,17 @@ iam_client = boto3.client('iam')
 
 # Create an instance profile
 iam_client.create_instance_profile(
-    InstanceProfileName = 'ec2_and_s3',
+    InstanceProfileName = 'instance_access_for_s3',
 )
 
 # Connect to the resource and the instance profile you've just created 
 iam_resource = boto3.resource('iam')
-instance_profile = iam_resource.InstanceProfile('ec2_and_s3')
+instance_profile = iam_resource.InstanceProfile('instance_access_for_s3')
 
 # Add the desired IAM role, this should have been created earlier in the AWS console
 instance_profile.add_role(RoleName='full_s3_access')
 ```
 
-In the above block of code we create an instance profile names "ec2_and_s3" and assign it the access role "full_s3_access" which I created earlier through the dashboard. 
+In the above block of code we create an instance profile names "instance_access_for_s3" and assign it the access role "full_s3_access" which I created earlier through the dashboard. 
 
-You know an instance has successfully been granted access because if you open a prompt to the instance and type `aws configure` your keys will already be filled. 
+You know an instance has successfully been granted access because if you open a prompt to the instance and type `aws configure` your aws info will already be filled out. 
