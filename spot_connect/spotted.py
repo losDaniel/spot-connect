@@ -53,7 +53,7 @@ class SpotInstance:
                  filesystem=None,
                  image_id=None,
                  instance_type=None,
-                 price=None,
+                 price:float=None,
                  region=None,
                  username=None,
                  key_pair=None,
@@ -186,11 +186,9 @@ class SpotInstance:
             raise e
             sys.exit(1)
        
-        print(self.filled_profile)
-        print('')
 
         if self.filled_profile['efs_mount']: 
-            print('Profile requesting EFS mount...')
+            print('Requesting EFS mount...')
             if self.filesystem!='':             # If no filesystem name is submitted 
                 fs_name = self.filesystem     
             
@@ -201,7 +199,7 @@ class SpotInstance:
                     raise e 
                     sys.exit(1)        
 
-                print('Connecting to instance to link EFS...')
+                print('Connecting instance to link EFS...')
                 methods.run_script(self.instance, self.profile['username'], elastic_file_systems.compose_mount_script(self.filesystem_dns), kp_dir=self.kp_dir, cmd=True)
                     
             else: 
@@ -214,14 +212,15 @@ class SpotInstance:
         print('\nDone. Current instance state: '+self.state)
     
     
-    def refresh_instance(self):
+    def refresh_instance(self, verbose=True):
         '''Refresh the instance to get its current status & information'''
         client = boto3.client('ec2', region_name=self.profile['region'])
 
         reservations = client.describe_instances(InstanceIds=[self.instance['InstanceId']])['Reservations']
         self.instance = reservations[0]['Instances'][0]                             
         self.state = self.instance['State']['Name']
-        print('Instance refreshed, current state: %s' % str(self.state))
+        if verbose: 
+            print('Instance refreshed, current state: %s' % str(self.state))
 
 
     def upload(self, files, remotepath, verbose=False):

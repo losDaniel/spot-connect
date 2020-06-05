@@ -5,9 +5,9 @@ spot_connect/__init__.py
 spot_connect/connect.py
 spot_connect/core_count.py
 spot_connect/elastic_file_systems.py
+spot_connect/instance_manager.py
 spot_connect/instances.py
 spot_connect/interactive.py
-spot_connect/link.py
 spot_connect/methods.py
 spot_connect/s3methods.py
 spot_connect/spotted.py

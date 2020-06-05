@@ -22,7 +22,7 @@ from spot_connect.sutils import genrs, load_profiles
 
 from IPython.display import clear_output
 
-class LinkAWS:
+class InstanceManager:
     
     efs = None 
     kp_dir = None 
@@ -34,8 +34,10 @@ class LinkAWS:
         
         __________
         parameters
-        - kp_dir : str. Key pair directory, if none is submitted default spot-connect directory will be used. If a default has not been set you will be prompted for one.
-        - efs : str. Name of the default elastic file system you would like instances managed by this link to connect to.
+        - kp_dir : str. Key pair directory, if none is submitted default spot-connect directory will be used. 
+                   If a default has not been set you will be prompted for one.
+        - efs : str. Name of the default elastic file system you would like instances managed by this link 
+                to connect to.
         '''
 
         self.kp_dir = None 
@@ -84,10 +86,13 @@ class LinkAWS:
         parameters
         - name : string. name of the spot instance
         - profile : dict of settings for the spot instance
-        - filesystem : string, default <name>. creation token for the EFS you want to connect to the instance  
+        - filesystem : string, default <name>. creation token for the EFS you want to 
+                       connect to the instance  
         - kp_dir : string. path name for where to store the key pair files 
         - monitoring : bool, default True. set monitoring to True for the instance 
-        - efs_mount : bool. If True, attach EFS mount. If no EFS mount with the name <filesystem> exists one is created. If filesystem is None the new EFS will have the same name as the instance  
+        - efs_mount : bool. If True, attach EFS mount. If no EFS mount with the name 
+                      <filesystem> exists one is created. If filesystem is None the new 
+                      EFS will have the same name as the instance  
         - newmount : bool. If True, create a new mount target on the EFS, even if one exists
         - instance_profile : str. Instance profile with attached IAM roles
         '''
@@ -108,7 +113,16 @@ class LinkAWS:
                                         )
         self.instances[name] = instance
 
-    def launch_monitor(self, instance_name='monitor', profile='default'):
+
+    def show_instances(self): 
+        display_dict = {} 
+        for key in self.instances: 
+            self.instances[key].refresh_instance(verbose=False)
+            display_dict[key] = self.instances[key].instance['State']['Name']
+        print(display_dict)
+
+
+    def launch_monitor(self, instance_name='monitor', profile='t2.micro'):
         '''
         Will launch the cheapest possible instance to use as a monitor. 
         
@@ -127,6 +141,10 @@ class LinkAWS:
     def terminate_monitor(self):
         '''Terminate the monitor instance'''
         self.monitor.terminate()
+
+
+    def terminate(self, instance_name):
+        self.instances[instance_name].terminate()
 
 
     def count_cores(self, instance):
@@ -152,6 +170,7 @@ class LinkAWS:
 
     	output = itc.run('pwd', cmd=True, return_output=True)
     	return output 
+
 
     def instance_s3_transfer(self, source, dest, instance_profile, efs=None, instance_name=None):
         '''

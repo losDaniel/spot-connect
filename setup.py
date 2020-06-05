@@ -8,7 +8,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup( 
 	name='spot-connect',
-	version='1.0.3',
+	version='1.0.4',
 	description='A package to create and manage AWS resources, centered around EC2 spot-instances',
 	long_description=long_description,
 	long_description_content_type='text/markdown',
@@ -24,7 +24,7 @@ setup(
 		]
 	},
 	install_requires=['boto3','netaddr','paramiko','path'],
-	python_requires='>=3.7',
+	python_requires='>=3.0',
 	package_data={'spot_connect':['data/key_pair_default_dir.txt','data/profiles.txt','data/ami_data.csv','data/spot_instance_pricing.csv']},
 	include_package_data=True,
 )

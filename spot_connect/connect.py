@@ -116,7 +116,7 @@ def main():                                                     # Main execution
             files_to_upload.append(os.path.abspath(file))
         methods.upload_to_ec2(instance, profile['username'], files_to_upload, remote_dir=args.remotepath)    
 
-    print('Time to Upload: %s' % str(time.time()-st))
+        print('Time to Upload: %s' % str(time.time()-st))
 
     st = time.time() 
     
@@ -134,7 +134,7 @@ def main():                                                     # Main execution
             print(str(e))
             print('Script %s failed with above error' % script)
 
-    print('Time to Run Scripts: %s' % str(time.time()-st))
+        print('Time to Run Script: %s' % str(time.time()-st))
     
     if args.activeprompt:
         methods.active_shell(instance, profile['username'])

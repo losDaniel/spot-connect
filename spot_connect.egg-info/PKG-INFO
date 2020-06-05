@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: spot-connect
-Version: 1.0.3
+Version: 1.0.4
 Summary: A package to create and manage AWS resources, centered around EC2 spot-instances
 Home-page: https://github.com/losDaniel/spot-connect.git
 Author: Carlos Valcarcel
@@ -45,7 +45,7 @@ Description: # [Spot Connect](https://pypi.org/project/spot-connect/)
         
         **Warning**:
         
-        Because spot instances rely on excess capacity they can be requisitioned by Amazon when demand increases, this gives users a 2 minute window to close their session and abandon the spot instance, forcing any unfinished work to resume on another spot instance should that be the user's choice. Read more about this in the **Suggested Project Guidelines** section below. 
+        Since spot instances rely on excess capacity, they can be requisitioned by Amazon when demand increases. When instances are requisitioned users get a 2 minute warning to close their session and abandon the spot instance, forcing any unfinished work to resume on another spot instance should that be the user's choice. Read more about how to deal with this in the **Suggested Project Guidelines** section below. 
          	
         <br>
         
@@ -56,7 +56,7 @@ Description: # [Spot Connect](https://pypi.org/project/spot-connect/)
         	spot_connect -n instance_1 -p t2.micro -a True
         
         <br>
-        This will create an instance that will appear with the name "instance_1" in you EC2 concole, it will launch it with the default profile and instance type and leave an open prompt that is connected to the instance on your command prompt. 
+        This will create an instance that will appear with the name "instance_1" in you EC2 concole, it will launch it with the t2.micro profile and instance type and leave an open prompt that is connected to the instance on your command prompt. 
         
         
         `spot_connect` can be executed a command line to launch or reconnect to an instance, mount an elastic files system, upload files, execute scripts and leave an active shell connected to the instance open in your command line. 
@@ -69,7 +69,7 @@ Description: # [Spot Connect](https://pypi.org/project/spot-connect/)
         
         <br>
         
-        __*Profile*__ `-n` dictionary of parameters that describe the instance to be launched, the list of predefined profiles can be viewed using `spot_connect.sutils.load_profiles()`. 
+        __*Profile*__ `-p` dictionary of parameters that describe the instance to be launched, the list of predefined profiles can be viewed using `spot_connect.sutils.load_profiles()`. 
         
         <br>
         
@@ -285,7 +285,7 @@ Description: # [Spot Connect](https://pypi.org/project/spot-connect/)
         
         <br> 
         
-        ## [Instance Profiles]((https://docs.aws.amazon.com/codedeploy/latest/userguide/getting-started-create-iam-instance-profile.html)
+        ## [Instance Profiles](https://docs.aws.amazon.com/codedeploy/latest/userguide/getting-started-create-iam-instance-profile.html)
         
         Instance profiles are rolls that you can create and assign to instances in order to grant them access to other AWS resources such as S3. Read more about what they are and how to use them in [this link](https://docs.aws.amazon.com/codedeploy/latest/userguide/getting-started-create-iam-instance-profile.html). 
         
@@ -315,5 +315,5 @@ Description: # [Spot Connect](https://pypi.org/project/spot-connect/)
         You know an instance has successfully been granted access because if you open a prompt to the instance and type `aws configure` your keys will already be filled. 
 Keywords: aws ec2 cloud ssh machinelearning virtualmachine
 Platform: UNKNOWN
-Requires-Python: >=3.7
+Requires-Python: >=3.0
 Description-Content-Type: text/markdown

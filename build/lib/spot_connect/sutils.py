@@ -162,16 +162,16 @@ def select_image(region):
 
 def add_profile(profile_dict, instance_type, image_id, image_name, bid_price, min_price, region, username):
     profile_dict[instance_type]={
-        'efs_mount': True,
+        'efs_mount': str(True),
         'firewall_ingress': ('tcp', 22, 22, '0.0.0.0/0'),
         'image_id': image_id,
-        'image_name':image_name,
-        'instance_type': instance_type,
-        'price': bid_price,
-        'min_price':min_price,
-        'region': region,
+        'image_name': image_name,
+        'instance_type': str(instance_type),
+        'price': str(bid_price),
+        'min_price': str(min_price),
+        'region': str(region),
         'scripts': [],
-        'username': username
+        'username': str(username)
     }
     return profile_dict
 

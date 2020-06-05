@@ -44,6 +44,10 @@ def launch_spot_instance(spotid,
     - enable_ds : bool, default True. When true, add HTTP ingress rules to security group (TCP access from port 80)
     '''
 
+    print('Profile:')
+    print(profile)
+    print('')    
+
     # Connect to aws ec2 subnet as a client 
     client = boto3.client('ec2', region_name=profile['region'])                
     
