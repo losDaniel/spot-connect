@@ -17,6 +17,115 @@ import boto3, paramiko, time, sys
 
 from spot_connect import sutils 
 
+
+def create_key_pair(client, profile, kp_dir=None):
+    # Create a key pair on AWS
+    keypair = client.create_key_pair(KeyName=profile['key_pair'][0])       
+    
+    if kp_dir is None: 
+        kp_dir = sutils.get_default_kp_dir()
+
+    # Download the private key into the CW
+    with open(kp_dir+'/'+profile['key_pair'][1], 'w') as file:             
+        file.write(keypair['KeyMaterial'])
+        file.close()
+    print('Key pair created...')
+
+
+def retrieve_security_group(spotid, client=None, region=None):    
+    if client is None: 
+        assert region is not None
+        client = boto3.client('ec2', region_name=region)                
+
+    elif region is None: 
+        assert client is not None
+    
+    sg = client.describe_security_groups(Filters=[{'Name':'group-name','Values':[spotid]}])['SecurityGroups'][0]
+    return sg 
+
+
+def get_security_group(client, spotid:str, enable_nfs:bool=False, enable_ds:bool=False, firewall_ingress_settings=None):  
+    ''''''
+    
+    if firewall_ingress_settings is not None: 
+        assert type(firewall_ingress_settings) == tuple 
+        assert len(firewall_ingress_settings) == 4 
+      
+    try: 
+        # Create a security group for the current spot instance id 
+        sg = client.create_security_group(GroupName=spotid,          
+                                          Description='SG for '+spotid)
+        
+        if enable_nfs:                                                     
+            # Add NFS rules (port 2049) in order to connect an EFS instance 
+            client.authorize_security_group_ingress(GroupName=spotid,
+                                                    IpPermissions=[
+                                                            {'FromPort': 2049,
+                                                             'IpProtocol': 'tcp',
+                                                             'IpRanges': [{'CidrIp': '0.0.0.0/0'}],
+                                                             'ToPort': 2049,
+                                                            }
+                                                    ])   
+        
+        if enable_ds:                                                      
+            # Add ingress & egress rules to enable datasync
+            # Add HTTP and HTTPS rules (port 80 & 443) in order to connect to datasync agent
+            client.authorize_security_group_ingress(GroupName=spotid,
+                                                    IpPermissions=[
+                                                            {'FromPort': 80,
+                                                             'IpProtocol': 'tcp',
+                                                             'IpRanges': [{'CidrIp': '0.0.0.0/0'}],
+                                                             'ToPort': 80,
+                                                            },
+                                                            {'FromPort': 443,
+                                                             'IpProtocol': 'tcp',
+                                                             'IpRanges': [{'CidrIp': '0.0.0.0/0'}],
+                                                             'ToPort': 443,
+                                                            }                                        
+                                                    ])
+
+            # Add HTTPS egress rules (port 443) in order to connect datasync agent instance to AWS 
+            client.authorize_security_group_egress(GroupId=sg['GroupId'],  
+                                                    IpPermissions=[
+                                                            {'FromPort': 443,
+                                                             'IpProtocol': 'tcp',
+                                                             'IpRanges': [{'CidrIp': '0.0.0.0/0'}],
+                                                             'ToPort': 443,
+                                                            }                                        
+                                                    ]) 
+
+        # Define ingress rules OTHERWISE YOU WILL NOT BE ABLE TO CONNECT
+        if firewall_ingress_settings is not None:                                  
+            client.authorize_security_group_ingress(GroupName=spotid,
+                                                    IpPermissions=[
+                                                            {'FromPort': firewall_ingress_settings[1],
+                                                             'IpProtocol': firewall_ingress_settings[0],
+                                                             'IpRanges': [
+                                                                     {'CidrIp': firewall_ingress_settings[3],
+                                                                      'Description': 'ips'
+                                                                      },
+                                                                      ],
+                                                            'ToPort': firewall_ingress_settings[2],
+                                                            }
+                                                    ])
+
+        #if 'firewall_egress' in profile:
+            # TODO : parameters for sg_egress and applplication to client.authorize_security_group_egress (Not necessary to establish a connection)
+            #pass            
+
+        sys.stdout.write("Security Group Created...")
+        sys.stdout.flush()  
+        
+    except Exception as e:
+        
+        if 'InvalidGroup.Duplicate' in str(e): 
+            print('Security group detected, re-using...')
+            sg = retrieve_security_group(spotid, client=client)
+        else: 
+            raise e 
+
+    return sg
+
 def launch_spot_instance(spotid, 
                          profile, 
                          instance_profile='', 
@@ -25,7 +134,8 @@ def launch_spot_instance(spotid,
                          instance_wait_sleep=5, 
                          kp_dir=None, 
                          enable_nfs=True, 
-                         enable_ds=True):
+                         enable_ds=True,
+                         instance_id=False):
     '''
     Launch a spot instance using the preconfigured aws account on boto3. Returns instance ID. 
     __________
@@ -42,6 +152,7 @@ def launch_spot_instance(spotid,
     - key_pair_dir : string. directory to store the private key files
     - enable_nfs : bool, default True. When true, add NFS ingress rules to security group (TCP access from port 2049)
     - enable_ds : bool, default True. When true, add HTTP ingress rules to security group (TCP access from port 80)
+    - instance_id : bool, default False. 
     '''
 
     print('Profile:')
@@ -61,20 +172,8 @@ def launch_spot_instance(spotid,
         profile['key_pair']=('KP-'+spotid,'KP-'+spotid+'.pem')                 
 
     try: 
-        # Create a key pair on AWS
-        keypair = client.create_key_pair(KeyName=profile['key_pair'][0])       
-        
-        if kp_dir is None: 
-            kp_dir = sutils.get_default_kp_dir()
-
-        # Download the private key into the CW
-        with open(kp_dir+'/'+profile['key_pair'][1], 'w') as file:             
-            file.write(keypair['KeyMaterial'])
-            file.close()
-        print('Key pair created...')
-
+        create_key_pair(client, profile, kp_dir)
     except Exception as e: 
-
         if 'InvalidKeyPair.Duplicate' in str(e): 
             print('Key pair detected, re-using...')
         else: 
@@ -88,93 +187,28 @@ def launch_spot_instance(spotid,
     #~#~#~#~#~#~#~#~#~#~#~#~#~#
 
     # If no security group was submitted 
-    if 'security_group' not in profile:                                        
-        
-        try: 
-            # Create a security group for the current spot instance id 
-            sg = client.create_security_group(GroupName='SG-'+spotid,          
-                                              Description='SG for '+spotid)
-            
-            if enable_nfs:                                                     
-                # Add NFS rules (port 2049) in order to connect an EFS instance 
-                client.authorize_security_group_ingress(GroupName='SG-'+spotid,
-                                                        IpPermissions=[
-                                                                {'FromPort': 2049,
-                                                                 'IpProtocol': 'tcp',
-                                                                 'IpRanges': [{'CidrIp': '0.0.0.0/0'}],
-                                                                 'ToPort': 2049,
-                                                                }
-                                                        ])   
-            
-            if enable_ds:                                                      
-                # Add ingress & egress rules to enable datasync
-                # Add HTTP and HTTPS rules (port 80 & 443) in order to connect to datasync agent
-                client.authorize_security_group_ingress(GroupName='SG-'+spotid,
-                                                        IpPermissions=[
-                                                                {'FromPort': 80,
-                                                                 'IpProtocol': 'tcp',
-                                                                 'IpRanges': [{'CidrIp': '0.0.0.0/0'}],
-                                                                 'ToPort': 80,
-                                                                },
-                                                                {'FromPort': 443,
-                                                                 'IpProtocol': 'tcp',
-                                                                 'IpRanges': [{'CidrIp': '0.0.0.0/0'}],
-                                                                 'ToPort': 443,
-                                                                }                                        
-                                                        ])
+    if 'security_group' not in profile:                                                    
+        # Create and retrieve the security group 
+        sg = get_security_group(client, 'SG-'+spotid, enable_nfs=enable_nfs, enable_ds=enable_ds, firewall_ingress_settings=profile['firewall_ingress'])    
 
-                # Add HTTPS egress rules (port 443) in order to connect datasync agent instance to AWS 
-                client.authorize_security_group_egress(GroupId=sg['GroupId'],  
-                                                        IpPermissions=[
-                                                                {'FromPort': 443,
-                                                                 'IpProtocol': 'tcp',
-                                                                 'IpRanges': [{'CidrIp': '0.0.0.0/0'}],
-                                                                 'ToPort': 443,
-                                                                }                                        
-                                                        ]) 
-
-            # Define ingress rules OTHERWISE YOU WILL NOT BE ABLE TO CONNECT
-            if 'firewall_ingress' in profile:                                  
-                client.authorize_security_group_ingress(GroupName='SG-'+spotid,
-                                                        IpPermissions=[
-                                                                {'FromPort': profile['firewall_ingress'][1],
-                                                                 'IpProtocol': profile['firewall_ingress'][0],
-                                                                 'IpRanges': [
-                                                                         {'CidrIp': profile['firewall_ingress'][3],
-                                                                          'Description': 'ips'
-                                                                          },
-                                                                          ],
-                                                                'ToPort': profile['firewall_ingress'][2],
-                                                                }
-                                                        ])
-
-            if 'firewall_egress' in profile:
-                # TODO : parameters for sg_egress and applplication to client.authorize_security_group_egress (Not necessary to establish a connection)
-                pass            
-
-            sys.stdout.write("Security Group Created...")
-            sys.stdout.flush()  
-            
-        except Exception as e:
-            
-            if 'InvalidGroup.Duplicate' in str(e): 
-                print('Security group detected, re-using...')
-                sg = client.describe_security_groups(Filters=[{'Name':'group-name','Values':['SG-'+spotid]}])['SecurityGroups'][0]
-            else: 
-                raise e 
-            
+        # For the profile we need a tuple of the security group ID and the security group name. 
         profile['security_group'] = (sg['GroupId'],'SG-'+spotid)               # Add the security group ID and name to the profile dictionary 
 
     #~#~#~#~#~#~#~#~#~#~#~#~#~#~#
     #~#~# Instance Requests #~#~#
     #~#~#~#~#~#~#~#~#~#~#~#~#~#~#
 
+    # TODO : add the option to identify spot instances by id. 
+    # TODO : organize the security-group, launch-group naming so that everything maps to AWS.  
+    
+    
     # Retrieve current active or open spot instance requests under the current security group
-    spot_requests = client.describe_spot_instance_requests(Filters=[{'Name':'launch.group-id', 'Values':[profile['security_group'][0]]},
+    spot_requests = client.describe_spot_instance_requests(Filters=[{'Name':'launch-group', 'Values':[spotid]},
                                                                      {'Name':'state','Values':['open','active']}])['SpotInstanceRequests']
     
     # If there are open/active instance requests with the same name (should only be one) re-use the first one that was found 
-    if len(spot_requests)>0:                                                   
+    if len(spot_requests)>0:               
+        print('Spot instance found')                                    
         spot_req_id = spot_requests[0]['SpotInstanceRequestId']                
 
     else:
@@ -204,6 +238,7 @@ def launch_spot_instance(spotid,
             ClientToken=spotid,                                                # submit a name to ensure idempotency 
             DryRun=False,                                                      # if True, checks if you have permission without actually submitting request
             InstanceCount=1,                                                   # number of individual instances 
+            LaunchGroup=spotid,
             LaunchSpecification=launch_specs,
             SpotPrice=profile['price'],                                        # Must be greater than current instance type price for region, available at https://aws.amazon.com/ec2/spot/pricing/ 
             Type='one-time',                                                   # Persisitence is usually not necessary (given storage backup) or advisable with spot instances 
@@ -217,7 +252,7 @@ def launch_spot_instance(spotid,
     spot_tag_added = False
     
     # Wait for the instance to initialize, retrieve the request by ID 
-    while not instance_id:                                                     
+    while not instance_id:  # I know this is unusual cause its not a boolean but it works.                                                     
         spot_req = client.describe_spot_instance_requests(Filters=[{'Name':'spot-instance-request-id', 'Values':[spot_req_id]}])['SpotInstanceRequests']
 
         if len(spot_req)>0:          
@@ -242,8 +277,7 @@ def launch_spot_instance(spotid,
                 sys.stdout.write(".")
                 sys.stdout.flush()                                                   
                 time.sleep(spot_wait_sleep)
-        else: 
-            
+        else:             
             # If its the first attempt print launching and follow that with a bunch of periods until we're done
             if attempt==0:
                 sys.stdout.write('Launching...')
@@ -301,6 +335,10 @@ def launch_spot_instance(spotid,
     print('..Online')
 
     return instance, profile
+
+
+
+
 
 
 def connect_to_instance(ip, keyfile, username='ec2-user', port=22, timeout=10):

@@ -3,20 +3,23 @@ Author: Carlos Valcarcel <carlos.d.valcarcel.w@gmail.com>
 
 This file is part of spot-connect
 
-Toolbox for launching an AWS spot instance: 
+Toolbox for working with AWS ec2-instances: 
 
-This package consists mainly of the boto3 functions that are used to request, 
-launch and interact with a spot instance. These functions are used in the 
-spot_connect.py script which can be launched from the command line or the 
-spotted class which can be run from a notebook or python script
+the sutils submodule contains general-use python functions that are needed to 
+build out the other sub-modules in spot-connect.
 
 MIT License 2020
 """
 
 import os, ast, boto3, random, string, pprint, glob, re
+import _pickle as pickle
 import pandas as pd 
+import numpy as np
 from path import Path 
 from IPython.display import clear_output
+
+root = Path(os.path.dirname(os.path.abspath(__file__)))
+
 
 def chunks(lst, n):
     """Yield successive n-sized chunks from lst."""
@@ -129,7 +132,6 @@ def clear_key_pairs():
     else: 
         raise Exception('User exit')
 
-
 def find_username(s):
     for k in username_dictionary:
         ios = re.findall('('+k+')',s)
@@ -140,14 +142,12 @@ def find_username(s):
     
     return ios
 
-
 def select_region():
     for i,r in enumerate(ami_data['region'].unique()): print(i,r)
     region_idx = int(input('Enter the number of the region you want to set the profiles to'))
     region = list(ami_data['region'].unique())[region_idx]    
     clear_output()    
     return region 
-
 
 def select_image(region):
     image_list = ami_data.loc[ami_data['region']==region, 'image_name']
@@ -158,7 +158,6 @@ def select_image(region):
     username = list(ami_data.loc[ami_data['region']==region, 'username'])[image_idx]    
     clear_output()    
     return image_id, image_name, username
-
 
 def add_profile(profile_dict, instance_type, image_id, image_name, bid_price, min_price, region, username):
     profile_dict[instance_type]={
@@ -174,7 +173,6 @@ def add_profile(profile_dict, instance_type, image_id, image_name, bid_price, mi
         'username': str(username)
     }
     return profile_dict
-
 
 def reset_profiles(price_increase=1.15):
     
@@ -205,6 +203,53 @@ def reset_profiles(price_increase=1.15):
                                    username)
 
     save_profiles(profile_dict)
+
+def full_pickle(title, data):
+    '''pickles the submited data and titles it'''
+    pikd = open(title + '.pickle', 'wb')
+    pickle.dump(data, pikd)
+    pikd.close()   
+    
+def loosen(file):
+    '''loads and returns a pickled objects'''
+    pikd = open(file, 'rb')
+    data = pickle.load(pikd)
+    pikd.close()
+    return data   
+
+def splitWorkloads(n_jobs, workload, wrkdir=None, filename=None):
+    '''Split the workload into n_jobs which are saved as pickle files in the wrkdir under the filename<i> for each job i
+    This is meant to be used to create the upload material for distributed jobs. 
+    '''    
+    
+    if wrkdir is None: 
+        wrkdir = root + '\\temp\\'
+        if not os.path.exists(wrkdir): 
+            try: 
+                os.mkdir(wrkdir)
+            except Exception as e: 
+                print('Failed to make directory, submiting an existing directory will fix this. Otherwise you can change permissions.')
+                raise e 
+                
+    assert os.path.exists(wrkdir)
+    
+    if filename is None:
+        filename = wrkdir + '\\current_workload'
+    else: 
+        filename = wrkdir + '\\' + filename
+        
+    workload_size = int(np.ceil(len(workload))/n_jobs)
+        
+    workload_list = [c for c in chunks(workload, workload_size)]
+    
+    wnum = 0 
+    filenames = [] 
+    for work in workload_list: 
+        full_pickle(wrkdir+filename+str(wnum), work)
+        filenames.append(filename+str(wnum)+'.pickle')
+        wnum += 1 
+
+    return filenames 
 
 # Load the data needed for the module
 username_dictionary = {'Linux':'ec2-user',

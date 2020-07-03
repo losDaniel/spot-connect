@@ -160,11 +160,14 @@ class SpotInstance:
         
         self.key_pair = None 
         if key_pair is not None:
-            self.profile['key_pair']=key_pair
+            self.profile['key_pair']=(key_pair, key_pair+'.pem')
             
         self.sec_group = None 
         if sec_group is not None:
-            self.profile['security_group']=sec_group       
+            # Retrieve the security group 
+            sg = instances.retrieve_security_group(sec_group, region=self.profile['region'])    
+            # For the profile we need a tuple of the security group ID and the security group name. 
+            self.profile['security_group'] = (sg['GroupId'], self.sec_group)          
             
         if instance_profile is not None: 
             self.instance_profile=instance_profile
@@ -189,7 +192,7 @@ class SpotInstance:
 
         if self.filled_profile['efs_mount']: 
             print('Requesting EFS mount...')
-            if self.filesystem!='':             # If no filesystem name is submitted 
+            if self.filesystem!='':             # If a filesystem name is submitted 
                 fs_name = self.filesystem     
             
                 # Create and/or mount an EFS to the instance 

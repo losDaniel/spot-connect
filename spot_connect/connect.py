@@ -51,9 +51,16 @@ def main():                                                     # Main execution
     parser.add_argument('-a', '--activeprompt', help='If "True" leave an active shell open after running scripts', default=False)
     parser.add_argument('-t', '--terminate', help='Terminate the instance after running everything', default=False)
     parser.add_argument('-m', '--monitoring', help='Activate monitoring for the instance', default=True)
-    parser.add_argument('-em','--efsmount', help='if True, will connect or create a filesystem', default=True)
+    parser.add_argument('-kp', '--keypair', help='name of the key pair to use (will default to KP-<name>)', default='')
+    parser.add_argument('-sg', '--securitygroup', help='name of the security group to use (will default to SG-<name>)', default='')
+    parser.add_argument('-em','--efsmount', help='if True, will connect or create a filesystem (if no filesystem name is submitted this will be False)', default=True)
     parser.add_argument('-nm','--newmount', help='Create a new mount target even if one exists', default=False)
     parser.add_argument('-ip','--instanceprofile', help='Instance profile with attached IAM roles', default='')
+    parser.add_argument('-fw','--firewall', help='A tuple of len 4 with firewall settings', default='')
+    parser.add_argument('-ami','--imageid', help='The ID for the AMI image to use', default='')
+    parser.add_argument('-prc','--price', help='Custom maximum price for the instance', default='')
+    parser.add_argument('-reg','--region', help='AWS Region to use', default='')
+    parser.add_argument('-un','--username', help='Username to use to log into the instance, default is ec2-user', default='')
     args = parser.parse_args()
     
     profile = profiles[args.profile]
@@ -62,6 +69,36 @@ def main():                                                     # Main execution
     print('#~#~#~#~#~#~#~# Launching '+args.name, flush=True)
     print('#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#', flush=True)
     print('', flush=True)
+        
+    if not args.efsmount:
+        profile['efs_mount'] = False
+    
+    if args.keypair != '':
+        profile['key_pair'] = (args.keypair, args.keypair+'.pem')
+
+    if args.firewall != '':
+        profile['firewall_ingress'] = args.firewall
+        
+    if args.imageid != '': 
+        profile['image_id'] = args.imageid
+        
+    if args.imageid != '': 
+        profile['image_id'] = args.imageid
+        
+    if args.price != '': 
+        profile['price'] = args.price
+        
+    if args.region != '': 
+        profile['region'] = args.region
+
+    if args.securitygroup != '':
+        # Retrieve the security group 
+        sg = instances.retrieve_security_group(args.securitygroup, region=profile['region'])    
+        # For the profile we need a tuple of the security group ID and the security group name. 
+        profile['security_group'] = (sg['GroupId'],args.securitygroup)          
+
+    if args.username != '': 
+        profile['username'] = args.username     
     
     try: 
         kp_dir = sutils.get_package_kp_dir() 
@@ -78,14 +115,12 @@ def main():                                                     # Main execution
         kp_dir = kp_dir + '/'
 
     # Launch the instance using the name profile, instance profile and monitoring arguments     
-    try:                                                   
+    try:                    
+        # If a key pair and security group were not added provided, they wil be created using the name of the instance                                
         instance, profile = instances.launch_spot_instance(args.name, profile, instance_profile=args.instanceprofile, monitoring=args.monitoring, kp_dir=kp_dir)  # Launch or connect to the spot instance under the given name 
     except Exception as e:
         raise e
         sys.exit(1)
-
-    if not args.efsmount:
-        profile['efs_mount'] = False
 
     if profile['efs_mount']: 
         

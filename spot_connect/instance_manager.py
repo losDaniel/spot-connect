@@ -31,7 +31,9 @@ class InstanceManager:
     
     def __init__(self, kp_dir=None, efs=None): 
         '''
-        
+        The InstanceManager class provides a number of shortcuts for managing ec2 instances. 
+        These functions range from requesting instances on AWS to setting up distributed 
+        workloads. 
         __________
         parameters
         - kp_dir : str. Key pair directory, if none is submitted default spot-connect directory will be used. 
@@ -172,6 +174,13 @@ class InstanceManager:
     	return output 
 
 
+    def list_instance_profiles(): 
+        # Connect to the IAM client 
+        iam_client = boto3.client('iam')
+        
+        iam_client.list_instance_profiles()
+
+
     def instance_s3_transfer(self, source, dest, instance_profile, efs=None, instance_name=None):
         '''
     	Will launch a new instance to transfer files from an S3 bucket to an instance or vice-versa. 
@@ -271,6 +280,7 @@ class InstanceManager:
         if proceed:
             command = ''
             command +='cd '+instance_path+'\n'
+            command += 'git pull origin'
             command +='git checkout '+branch+'\n'
             if repo_link is None:
                 command+='git pull origin '+branch+'\n'
@@ -279,7 +289,8 @@ class InstanceManager:
             instance.run(command, cmd=True)
         else:
             raise Exception(str(instance_path)+' path was not found on instance')
-            
+      
+        
     def run_distributed_jobs(self, prefix, n_jobs, scripts, profile, filesystem=None, uploads=None, upload_path='.'):
         '''Distribute scripts and workloads across a given number of instances with a given profile'''
         
@@ -288,7 +299,6 @@ class InstanceManager:
         else: 
             fs = self.efs
             
-
         try: 
             assert len(scripts) == n_jobs
         except: 

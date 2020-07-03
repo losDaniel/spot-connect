@@ -109,6 +109,9 @@ def retrieve_efs_mount(file_system_name, instance, new_mount=False, region='us-w
         net = IPNetwork(subnet.cidr_block)                                     # Get the IPv4 CIDR block assigned to the subnet.
         ips = [str(x) for x in list(net[4:-1])]                                # The CIDR block is a block or range of IP addresses, we only need to assign one of these to a single mount
 
+        # TODO: This might be why sometimes efs mounts disconnect from one instance or another 
+        # Because we assign the same IP address and it no longer remains connected. 
+        
         ipid = 0 
         complete = False 
 

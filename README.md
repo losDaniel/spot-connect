@@ -305,3 +305,24 @@ instance_profile.add_role(RoleName='full_s3_access')
 In the above block of code we create an instance profile names "instance_access_for_s3" and assign it the access role "full_s3_access" which I created earlier through the dashboard. 
 
 You know an instance has successfully been granted access because if you open a prompt to the instance and type `aws configure` your aws info will already be filled out. 
+
+
+## Add Fleet Role Section and Spot Fleet Explanation 
+
+
+The spot fleet request appears in the spot-requests window. Then new spot_requests appear in the spot_request window. 
+If the spot-fleet-request is terminated, all instances associated with that request are terminated. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
