@@ -313,10 +313,16 @@ You know an instance has successfully been granted access because if you open a 
 The spot fleet request appears in the spot-requests window. Then new spot_requests appear in the spot_request window. 
 If the spot-fleet-request is terminated, all instances associated with that request are terminated. 
 
+Make sure you create your spot fleet credentials as indicated in this tutorial: 
 
 
+When you terminate an instance from the console, if the fleet request is still active, another instance will be created to replace it. 
 
+When you terminate an instance, while that instance is shut down, the number of instances that appear in the list response to describe_spot_fleet_instances decreases by one. In other words, you could retain the instance_ids for a given fleet. Monitor the fleet by checking if the instance ids change, if they do change,
 
+for each one that is no longer there, select one of the new ones. 
+
+find the job that the instance was assigned to and replace that instance id with the new one. Then run the script on the instance. 
 
 
 

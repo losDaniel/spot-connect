@@ -3,18 +3,17 @@ Author: Carlos Valcarcel <carlos.d.valcarcel.w@gmail.com>
 
 This file is part of spot-connect
 
-Toolbox for launching an AWS spot instance: 
+Toolbox for launching an AWS spot instance - instance_methods.py: 
 
-This package consists mainly of the boto3 functions that are used to request, 
-launch and interact with a spot instance. These functions are used in the 
-spot_connect.py script which can be launched from the command line or the 
-spotted class which can be run from a notebook or python script
+The instance_methods sub-module contains functions that interact with existing 
+instances, like running a script/command, uploading a file or even terminating
+the instance. 
 
 MIT License 2020
 """
 
-import sys, os, boto3 
-from spot_connect import instances, sutils, interactive
+import sys, boto3 
+from spot_connect import ec2_methods, sutils, interactive
 
 def run_script(instance, user_name, script, cmd=False, port=22, kp_dir=None, return_output=False):
     '''
@@ -36,7 +35,7 @@ def run_script(instance, user_name, script, cmd=False, port=22, kp_dir=None, ret
     else:   
         commands = open(script, 'r').read().replace('\r', '')
         
-    client = instances.connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username=user_name,port=port)
+    client = ec2_methods.connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username=user_name,port=port)
     
     session = client.get_transport().open_session()
     session.set_combine_stderr(True)                                           # Combine the error message and output message channels
@@ -72,7 +71,7 @@ def active_shell(instance, user_name, port=22, kp_dir=None):
     if kp_dir is None: 
         kp_dir = sutils.get_default_kp_dir()
     
-    client = instances.connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username=user_name,port=port)
+    client = ec2_methods.connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username=user_name,port=port)
 
     console = client.invoke_shell()                                            
     console.keep_this = client                                                
@@ -105,7 +104,7 @@ def upload_to_ec2(instance, user_name, files, remote_dir='.', kp_dir=None, verbo
     if kp_dir is None: 
         kp_dir = sutils.get_default_kp_dir()
 
-    client = instances.connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username='ec2-user',port=22)
+    client = ec2_methods.connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username='ec2-user',port=22)
     if verbose:
         print('Connected. Uploading files...')
     stfp = client.open_sftp()
@@ -139,7 +138,7 @@ def download_from_ec2(instance, username, get, put='.', kp_dir=None):
         kp_dir = sutils.get_default_kp_dir()
 
     client = boto3.client('ec2', region_name='us-west-2')
-    client = instances.connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username=username,port=22)
+    client = ec2_methods.connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username=username,port=22)
 
     stfp = client.open_sftp()
 

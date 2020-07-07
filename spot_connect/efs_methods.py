@@ -3,20 +3,22 @@ Author: Carlos Valcarcel <carlos.d.valcarcel.w@gmail.com>
 
 This file is part of spot-connect
 
-Toolbox for launching an AWS spot instance: 
+Toolbox for launching an AWS spot instance - efs_methods.py: 
 
-This package consists mainly of the boto3 functions that are used to request, 
-launch and interact with a spot instance. These functions are used in the 
-spot_connect.py script which can be launched from the command line or the 
-spotted class which can be run from a notebook or python script
-
+The efs_methods sub-module contains functionality to create and mount elastic
+file systems on AWS. 
+    
 MIT License 2020
 """
 
 import boto3
+import sys, time, os
+from path import Path
 from netaddr import IPNetwork
 
-import sys, time
+root = Path(os.path.dirname(os.path.abspath(__file__)))
+
+from spot_connect import sutils
 
 def launch_efs(system_name, region='us-west-2', launch_wait=3):
     '''Create or connect to an existing file system'''
@@ -109,10 +111,17 @@ def retrieve_efs_mount(file_system_name, instance, new_mount=False, region='us-w
         net = IPNetwork(subnet.cidr_block)                                     # Get the IPv4 CIDR block assigned to the subnet.
         ips = [str(x) for x in list(net[4:-1])]                                # The CIDR block is a block or range of IP addresses, we only need to assign one of these to a single mount
 
-        # TODO: This might be why sometimes efs mounts disconnect from one instance or another 
-        # Because we assign the same IP address and it no longer remains connected. 
+        # TODO: This might be why sometimes efs mounts disconnect from one instance or another, verify whether using the IDLOG works and whether this problem pops-up again.  
         
-        ipid = 0 
+        # Use an id log to keep track of which IPs get used in a single day 
+        # A list of the ips (indices of the Ips used) will be saved for each user. 
+        # Each time we run this we will pick a random ip from the list of available ips
+        idlog = sutils.CurrentIdLog(lower_limit=0, upper_limit=(len(ips)-1))
+
+        # Assume we're always using the same AWS config and thus always using the same user 
+        idlog.set_user_id(0)
+        ipid = idlog.get_valid_call_id()
+        
         complete = False 
 
         while not complete: 

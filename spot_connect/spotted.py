@@ -5,68 +5,78 @@ This file is part of spot-connect
 
 Spotted module: 
 
-The spotted class can implement all the functionality of spot_connect.py 
-but it can be run from a notebook or python script.
+The spotted class can implement all the functionality of connect.py but it can 
+be run from a notebook or python script and it can be handled by other scripts.
 
 MIT License 2020
 """
 
-import sys, time, os, copy, boto3, re
+import sys, time, os, copy, boto3
 from path import Path
 
 root = Path(os.path.dirname(os.path.abspath(__file__)))
 
-from spot_connect import sutils, instances, methods, elastic_file_systems
+from spot_connect import sutils, ec2_methods, iam_methods, efs_methods, instance_methods
+from spot_connect.bash_scripts import update_git_repo
 
 class SpotInstance: 
     
     profiles=sutils.load_profiles()         
 
-    name = None 
-    price = None 
-    client = None
-    region = None 
-    kp_dir = None 
-    profile = None 
-    instance = None 
-    username = None 
-    key_pair = None 
-    newmount = None 
-    firewall = None 
-    image_id = None 
-    sec_group = None 
-    efs_mount = None 
-    monitoring = None 
-    filesystem = None 
-    mount_target = None 
-    instance_dns = None 
-    instance_type = None 
-    filesystem_dns = None 
-    filled_profile = None 
-    instnace_profile = None
+    name            =   None 
+    instance_id     =   None 
+    key_pair        =   None 
+    security_group  =   None
+    instance_profile=   None 
+    
+    profile         =   None
+    efs_mount       =   None 
+    firewall        =   None 
+    image_id        =   None 
+    price           =   None 
+    region          =   None 
+    script          =   None 
+    username        =   None
+    
+    filesystem     =   None
+    new_mount       =   None 
+    upload          =   None 
+    remote_path     =   None 
+    monitoring      =   None 
+    
+    client          =   None
+    kp_dir          =   None 
+    instance        =   None 
+    mount_target    =   None 
+    instance_dns    =   None 
+    instance_type   =   None 
+    filesystem_dns  =   None 
+    filled_profile  =   None 
    
     def __init__(self,
-                 name,
-                 profile=None,
-                 instance_profile=None,
-                 monitoring=None,
-                 filesystem=None,
-                 image_id=None,
-                 instance_type=None,
-                 price:float=None,
-                 region=None,
-                 username=None,
-                 key_pair=None,
-                 kp_dir=None,
-                 sec_group=None,
-                 efs_mount=None,
-                 newmount=None,
-                 firewall=None):
+                 name           :   str,
+                 instance_id    :   bool  = False,
+                 profile        :   str   = None, 
+                 key_pair       :   str   = None, 
+                 kp_dir         :   str   = None,
+                 security_group :   str   = None, 
+                 instance_profile : str   = '', 
+                 efs_mount      :   bool  = False, 
+                 firewall       :   tuple = None, 
+                 image_id       :   str   = None, 
+                 price          :   float = None, 
+                 region         :   str   = None, 
+                 scripts        :   list  = None, 
+                 username       :   str   = None,
+                 filesystem     :   str   = None,
+                 new_mount      :   bool  = False, 
+                 monitoring     :   bool  = False):
         '''
         A class to run, control and interact with spot instances. 
         __________
         parameters
-        - name : string. name of the spot instance
+        - name : str. name for spot instance launch group (will be used as identifier)
+        - instance_id : bool. if True, consider instance id string (overrides --name)
         - profile : dict of settings for the spot instance
         - instance_profile : str. Instance profile with attached IAM roles
         - monitoring : bool, default True. set monitoring to True for the instance 
@@ -79,24 +89,61 @@ class SpotInstance:
         - key_pair : string. name of the keypair to use. Will search for `key_pair`.pem in the current directory 
         - kp_dir : string. path name for where to store the key pair files 
         - sec_group : string. name of the security group to use
-        - efs_mount : bool. If True, attach EFS mount. If no EFS mount with the name <filesystem> exists one is created. If filesystem is None the new EFS will have the same name as the instance  
-        - newmount : bool. If True, create a new mount target on the EFS, even if one exists
+        - efs_mount : bool. (for advanced use) If True, attach EFS mount. If no EFS mount with the name <filesystem> exists one is created. If filesystem is None the new EFS will have the same name as the instance  
+        - newmount : bool. (for advanced use) If True, create a new mount target on the EFS, even if one exists. If False, will be set to True if file system is submitted but no mount target is detected.
         - firewall : str. Firewall settings
         '''
 
+        if instance_id: 
+            self.using_id = True 
+        else: 
+            self.using_id = False 
+
         self.name = name 
-        self.client = None 
-        
-        print('Loading profiles, you can edit profiles in '+str(root))
-        
-        self.profile = None         
+        self.client = None         
+
+        self.profile = None 
+
         if profile is None: 
-            self.profile=copy.deepcopy(SpotInstance.profiles['default'])            # create a deep copy so that the class dictionary doesn't get modified  
+            raise Exception('Must specify a profile')  
         else: 
             self.profile=copy.deepcopy(SpotInstance.profiles[profile])        
+        
+        if key_pair is not None:
+            self.profile['key_pair']=(key_pair, key_pair+'.pem')
 
-        # Set directory in which to save the key-pairs
+        self.filesystem = None 
+
+        if filesystem is None: 
+            self.filesystem=''
+            self.profile['efs_mount'] = False
+            print('No EFS mount requested for this instance.')                                         
+        else:
+            self.filesystem=filesystem
+            self.profile['efs_mount'] = True
+            print('Instance will be mounted on the '+self.filesystem+' elastic filesystem')
+        
+        if firewall is not None:
+            self.profile['firewall']=firewall
+        
+        if image_id is not None:
+            self.profile['image_id']=image_id
+        
+        if price is not None:
+            self.profile['price']=price
+        
+        if region is not None:
+            self.profile['region']=region
+        
+        if username is not None:
+            self.profile['username']=username
+        
+        if security_group is not None: 
+            sg = iam_methods.retrieve_security_group(security_group, region=self.profile['region'])    
+            self.profile['security_group'] = (sg['GroupId'], self.sec_group)          
+            
         self.kp_dir = None 
+        
         if kp_dir is not None: 
             self.kp_dir = kp_dir
         else: 
@@ -111,112 +158,71 @@ class SpotInstance:
                 sutils.set_default_kp_dir(kp_dir)
                 print('You can change the default key-pair directory using spot_connect.sutils.set_default_kp_dir(<dir>)' % kp_dir)
                 self.kp_dir = kp_dir
-        
-        self.monitoring = None 
-        if monitoring is None: 
-            self.monitoring=True
-        else: 
-            self.monitoring=monitoring
-        
-        self.filesystem = None 
-        if filesystem is None: 
-            self.filesystem=''
-        else:
-            self.filesystem=filesystem
-        
-        self.newmount = None 
-        if newmount is None:   
-            self.newmount=False
-        else:              
-            self.newmount=newmount        
-                
-        self.efs_mount = None 
-        if efs_mount is not None: 
-            self.profile['efs_mount']=efs_mount
-        
-        self.firewall = None 
-        if firewall is not None:
-            self.profile['firewall']=firewall
-        
-        self.image_id = None 
-        if image_id is not None:
-            self.profile['image_id']=image_id
-        
-        self.instance_type = None 
-        if instance_type is not None:
-            self.profile['instance_type']=instance_type
-        
-        self.price = None 
-        if price is not None:
-            self.profile['price']=price
-        
-        self.region = None 
-        if region is not None:
-            self.profile['region']=region
-        
-        self.username = None 
-        if username is not None:
-            self.profile['username']=username
-        
-        self.key_pair = None 
-        if key_pair is not None:
-            self.profile['key_pair']=(key_pair, key_pair+'.pem')
-            
-        self.sec_group = None 
-        if sec_group is not None:
-            # Retrieve the security group 
-            sg = instances.retrieve_security_group(sec_group, region=self.profile['region'])    
-            # For the profile we need a tuple of the security group ID and the security group name. 
-            self.profile['security_group'] = (sg['GroupId'], self.sec_group)          
-            
-        if instance_profile is not None: 
-            self.instance_profile=instance_profile
-        else: 
-            self.instance_profile = ''
+
+        # Add a forward slash to the kp_dir 
+        if self.kp_dir[-1]!='/': self.kp_dir = self.kp_dir + '/'
+
+        self.new_mount = new_mount        
+        self.monitoring = monitoring 
+        self.instance_profile = instance_profile
                
         print('', flush=True)
         print('#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#', flush=True)
-        print('#~#~#~#~#~#~#~# Spot Instance: '+self.name, flush=True)
-        print('#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#', flush=True)
+        print('#~#~#~#~#~#~#~# Spotting '+self.name, flush=True)
+        print('#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#', flush=True)
         print('', flush=True)
         
         self.filled_profile = None         
 
-        try:                                     # Launch or connect to the spot instance under the given name
-            # Returns the profile with any parameters that needed to be added automatically in order to connect (Key Pair and Security Group)                                                                 
-            self.instance, self.filled_profile = instances.launch_spot_instance(self.name, self.profile, instance_profile=self.instance_profile, monitoring=self.monitoring, kp_dir=self.kp_dir)   
+        # Launch the Instance 
+        # Launch the instance using the name profile, instance profile and monitoring arguments     
+        try:         
+            # If a key pair and security group were not added provided, they wil be created using the name of the instance                                
+            self.instance, self.profile = ec2_methods.get_spot_instance(self.name, self.profile, instance_profile=self.instance_profile, monitoring=self.monitoring, kp_dir=self.kp_dir, using_instance_id=self.using_id)  # Launch or connect to the spot instance under the given name 
         except Exception as e:
             raise e
             sys.exit(1)
        
-
-        if self.filled_profile['efs_mount']: 
-            print('Requesting EFS mount...')
-            if self.filesystem!='':             # If a filesystem name is submitted 
-                fs_name = self.filesystem     
-            
-                # Create and/or mount an EFS to the instance 
-                try:                                
-                    self.mount_target, self.instance_dns, self.filesystem_dns = elastic_file_systems.retrieve_efs_mount(fs_name, self.instance, new_mount=self.newmount, region=self.profile['region'])
-                except Exception as e: 
-                    raise e 
-                    sys.exit(1)        
-
-                print('Connecting instance to link EFS...')
-                methods.run_script(self.instance, self.profile['username'], elastic_file_systems.compose_mount_script(self.filesystem_dns), kp_dir=self.kp_dir, cmd=True)
+        # Mount Elastic File System
+        if self.profile['efs_mount']: 
+           
+            print('Requesting EFS mount...')            
+            fs_name = self.filesystem                 
+            try:                                
+                self.mount_target, self.instance_dns, self.filesystem_dns = efs_methods.retrieve_efs_mount(fs_name, self.instance, new_mount=self.newmount, region=self.profile['region'])
+            except Exception as e: 
+                raise e 
+                sys.exit(1)        
+            print('Connecting instance to link EFS...')
+            instance_methods.run_script(self.instance, self.profile['username'], efs_methods.compose_mount_script(self.filesystem_dns), kp_dir=self.kp_dir, cmd=True)
+        
+        # Automatically Run Scripts 
+        st = time.time()
+        
+        scripts_to_run = []
+        if scripts is not None:
+            if len(scripts) > 0: 
+                scripts_to_run += scripts
+                
+        for script in profile['scripts'] + scripts: 
+            print('\nExecuting script "%s"...' % str(script))
+            try: 
+                if not instance_methods.run_script(self.instance, self.profile['username'], script, kp_dir=self.kp_dir):
+                    break
+            except Exception as e:
+                print(str(e))
+                print('Script %s failed with above error' % script)
+                
+            print('Time to run script: %s' % str(time.time()-st))
                     
-            else: 
-                pass
-                            
-        if len(self.profile['scripts'])>0:
-            methods.run_script(self.instance, self.profile['username'], self.profile['scripts'], kp_dir=self.kp_dir)
-
         self.state = self.instance['State']['Name']
+
         print('\nDone. Current instance state: '+self.state)
     
     
     def refresh_instance(self, verbose=True):
         '''Refresh the instance to get its current status & information'''
+
         client = boto3.client('ec2', region_name=self.profile['region'])
 
         reservations = client.describe_instances(InstanceIds=[self.instance['InstanceId']])['Reservations']
@@ -244,7 +250,7 @@ class SpotInstance:
         files_to_upload = [] 
         for file in files:
             files_to_upload.append(os.path.abspath(file))
-        methods.upload_to_ec2(self.instance, self.profile['username'], files_to_upload, remote_dir=remotepath, kp_dir=self.kp_dir, verbose=verbose)    
+        instance_methods.upload_to_ec2(self.instance, self.profile['username'], files_to_upload, remote_dir=remotepath, kp_dir=self.kp_dir, verbose=verbose)    
     
         if verbose:
             print('Time to Upload: %s' % str(time.time()-st))
@@ -278,7 +284,7 @@ class SpotInstance:
         files_to_download = [] 
         for file in files:
             files_to_download.append(file)
-        methods.download_from_ec2(self.instance, self.profile['username'], files_to_download, put=localpath, kp_dir=self.kp_dir)
+        instance_methods.download_from_ec2(self.instance, self.profile['username'], files_to_download, put=localpath, kp_dir=self.kp_dir)
     
         print('Time to Download: %s' % str(time.time()-st))
 
@@ -302,8 +308,8 @@ class SpotInstance:
             if not cmd:
                 print('\nExecuting script "%s"...' % str(script))
             try:
-                if return_output: run_stat, output = methods.run_script(self.instance, self.profile['username'], script, cmd=cmd, kp_dir=self.kp_dir, return_output=return_output)
-                else: run_stat = methods.run_script(self.instance, self.profile['username'], script, cmd=cmd, kp_dir=self.kp_dir, return_output=return_output)
+                if return_output: run_stat, output = instance_methods.run_script(self.instance, self.profile['username'], script, cmd=cmd, kp_dir=self.kp_dir, return_output=return_output)
+                else: run_stat = instance_methods.run_script(self.instance, self.profile['username'], script, cmd=cmd, kp_dir=self.kp_dir, return_output=return_output)
 
                 if not run_stat:
                     break
@@ -318,22 +324,49 @@ class SpotInstance:
             return output
 
 
-    def count_cores(self):
-        self.upload(os.path.abspath(root)+'\\core_count.py', '.')
-        output = self.run('python core_count.py', cmd=True, return_output=True)
-        
-        logical_cpus = int(re.findall('Logical CPUs: ([0-9]*)', output)[0])
-        physical_cpus = int(re.findall('Physical CPUs: ([0-9]*)', output)[0])
+    def clone_repo(self, repo_link, directory='/home/ec2-user/efs/'):
+        '''
+		Clone a git repo to the instance. Must specify a directory and target folder on the instance. This is so that organization on the instance is actively tracked by the user. 
+		Private Repos - the links for private repositories should be formatted as: https://username:password@github.com/username/repo_name.git
+		__________
+		parameters
+		- repo_link : str. Git repo link. The command executed is: git clone <repo_link> <path>
+		- directory : str. Instance directory to place the target folder and git repo. If directory is '.' target folder will be created in the home directory. To view the home directory for a given instance use the LinkAWS.get_instance_home_directory method
+		'''
+        proceed = self.dir_exists(directory)
+        if proceed:				
+            self.run('cd '+directory+'\ngit clone '+repo_link+'', cmd=True)
+        else:
+            raise Exception(str(directory)+' directory was not found on instance')
 
-        return logical_cpus, physical_cpus
 
+    def update_repo(self, path_on_instance, branch=None, repo_link=None):
+        '''
+		Update a given local repo to match the remote  
+		__________
+		parameters
+		- path_on_instance : str. The path to the local repo folder in the instance 
+		- branch : str. switch to this branch of the repo 
+		- repo_link : str. Mainly for private repos. In order to git pull a private repo you must submit a link of the format https://username:password@github.com/username/repo_name.git 
+		'''
+        proceed = self.dir_exists(path_on_instance)
+        if proceed:
+            command = update_git_repo(path_on_instance, branch=branch, repo_link=repo_link, command='')
+            self.run(command, cmd=True)
+        else:
+            raise Exception(str(path_on_instance)+' path was not found on instance')
+               
 
-    def dir_exists(self, dir):
-        output = self.run('[ -d "'+dir+'" ] && echo "True" || echo "False"', cmd=True, return_output=True)
+    def dir_exists(self, directory):
+        '''Check if a directory exists'''
+        # This method is critical for the s3 sync to work in the instance manager 
+        output = self.run('[ -d "'+directory+'" ] && echo "True" || echo "False"', cmd=True, return_output=True)
         if 'True' in output: return True 
         else: return False
         
 
     def terminate(self): 
         '''Terminate the instance'''
-        methods.terminate_instance(self.instance['InstanceId'])                    
+        instance_methods.terminate_instance(self.instance['InstanceId'])     
+
+
