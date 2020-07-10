@@ -12,6 +12,22 @@ for common packages, updating github repos, and managing spot-fleet settings.
 MIT License 2020
 """
 
+import base64
+
+
+def init_userdata_script():
+    '''Initialize a script to use with for the linux instance user_data.     
+    For more information on submitting user_data to EC2 instance visit https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html.     
+    The cloud-init output log file (/var/log/cloud-init-output.log) captures console output so it is easy to debug your scripts following a launch if the instance does not behave the way you intended.
+    '''
+    script = '#!/bin/bash\n'
+    return script 
+
+
+def script_to_userdata(script):
+    '''Takes a script as a string argument and converts it to a base64 encoded string that can be submitted as user_data to ec2 instances'''
+    return base64.b64encode(bytes(str(script), 'utf-8')).decode('ascii')
+
 
 def compose_s3_sync_script(source, dest, instance_path, logfile='s3_sync_log', command=''):
     '''This script syncs an instance and s3 and then shuts down the instance.'''
@@ -53,9 +69,18 @@ def install_ta_lib(download=False, command=''):
     command+= 'pip install ta-lib\n'
     # Return to the working directory 
     command+= 'cd ..\n'    
+    command+= 'echo INSTALLEDTALIB\n'
 
     return command 
 
+
+def run_file(py_filepath, 
+             args='',
+             logname='',
+             command=''):
+    command += 'python '+py_filepath+' '+args+' '+logname+'\n'
+    return command
+    
 
 def run_file_then_shutdown(py_filepath, 
                            args='', 
@@ -83,33 +108,34 @@ def run_file_then_shutdown(py_filepath,
     return command    
 
 
-def run_file_then_reduce_fleet(spot_fleet_req_id, py_filepath, args='', logname='', region='us-east-2', command=''):
+def run_file_then_reduce_fleet(py_filepath, args='', logname='', region='us-east-2', command=''):
     '''Runs a python script and then reduces spot fleet capacity and terminates itself. If fleet capacity is 1, cancels fleet request'''
 
     if logname != '': 
-        logname = '> '+logname+' &'
+        logname = '> '+logname
 
-    command += 'INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)'
-    command += 'INSTANCE_AZ=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)'
-    command += 'AWS_REGION="'+region+'"'    
+    command += 'INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)\n'
+    command += 'INSTANCE_AZ=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)\n'
+    command += 'AWS_REGION="'+region+'"\n'    
 
-    command += 'if [ $INSTANCE_ID ]; then'
+    command += 'if [ $INSTANCE_ID ]; then\n'
     command += 'python '+py_filepath+' '+args+' '+logname+'\n'
-    command += 'fi' 
+    command += 'fi\n' 
                                                                                                                # Needed to include the right " and ' characters here 
-    command += 'SPOT_FLEET_REQUEST_ID="'+spot_fleet_req_id+'"\n'
+    command += 'SPOT_FLEET_REQUEST_ID=$(aws ec2 describe-spot-instance-requests --region $AWS_REGION --filter "Name=instance-id,Values='+"'$INSTANCE_ID'"+'" --query "SpotInstanceRequests[].Tags[?Key=='+"'aws:ec2spot:fleet-request-id'"+'].Value[]" --output text)\n'
     command += 'SPOT_FLEET_CAPACITY=$(aws ec2 describe-spot-fleet-requests --spot-fleet-request-ids $SPOT_FLEET_REQUEST_ID --region $AWS_REGION --query "SpotFleetRequestConfigs[0].SpotFleetRequestConfig.TargetCapacity")\n'
 
     # If the spot fleet capacity is greater than 1 then reduce the capacity by 1, wait a moment, then terminate the instance.  
-    command += 'if [ $SPOT_FLEET_CAPACITY -gt 1 ]; then\n'    
+    command += 'if [ $SPOT_FLEET_CAPACITY -gt 1 ] ; then\n'    
     command += '    MODIFIED_CAPACITY=$((SPOT_FLEET_CAPACITY - 1))\n'    
     command += '    aws ec2 modify-spot-fleet-request --target-capacity $MODIFIED_CAPACITY --spot-fleet-request-id $SPOT_FLEET_REQUEST_ID --region $AWS_REGION\n'    
     command += '    sleep 5\n'
-    command += '    sudo shutdown -h now'
-    
-    command += 'elif [ $SPOT_FLEET_CAPACITY = 1 ]; then\n'    
-    command += '    aws ec2 cancel-spot-fleet-requests --region $AWS_REGION --spot-fleet-request-ids $SPOT_FLEET_REQUEST_ID --terminate-instances\n'
+    command += '    sudo shutdown -h now\n'
     command += 'fi\n'
+    
+    command += 'if [ $SPOT_FLEET_CAPACITY = 1 ] ; then\n'    
+    command += '    aws ec2 cancel-spot-fleet-requests --region $AWS_REGION --spot-fleet-request-ids $SPOT_FLEET_REQUEST_ID --terminate-instances\n'
+    command += 'fi'
     
     return command 
 

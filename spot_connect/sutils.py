@@ -258,8 +258,8 @@ def split_workloads(n_jobs, workload, wrkdir=None, filename=None):
     wnum = 0 
     filenames = [] 
     for work in workload_list: 
-        full_pickle(wrkdir+filename+str(wnum), work)
-        filenames.append(filename+str(wnum)+'.pickle')
+        full_pickle(filename+'_'+str(wnum), work)
+        filenames.append(filename+'_'+str(wnum)+'.pickle')
         wnum += 1 
 
     return filenames 

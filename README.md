@@ -325,6 +325,11 @@ for each one that is no longer there, select one of the new ones.
 find the job that the instance was assigned to and replace that instance id with the new one. Then run the script on the instance. 
 
 
+## Submitting User Data
+
+https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html
+
+The cloud-init output log file (/var/log/cloud-init-output.log) captures console output so it is easy to debug your scripts following a launch if the instance does not behave the way you intended.
 
 
 

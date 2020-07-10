@@ -11,7 +11,7 @@ infrastructure using the spotted module.
 MIT License 2020
 '''
 
-import boto3, os, time
+import boto3, os
 from path import Path 
 
 root = Path(os.path.dirname(os.path.abspath(__file__)))
@@ -22,10 +22,6 @@ from spot_connect.sutils import genrs, load_profiles, split_workloads
 from spot_connect.bash_scripts import compose_s3_sync_script
 from spot_connect.fleet_methods import launch_spot_fleet, get_fleet_instances
 from spot_connect.efs_methods import launch_efs
-from spot_connect.ec2_methods import check_instance_initialization
-
-from IPython.display import clear_output
-
 
 # TODO : Add bash script to reduce spot fleet capacity. Or check that, if its going to reduce it to zero, to cancel it. 
 
@@ -228,7 +224,7 @@ class InstanceManager:
         
     def split_workload(self, n_jobs, workload, wrkdir=None, filename=None): 
         '''Split a list into n_job chunks and save each chunk, return the list of filenames'''        
-        return split_workloads(n_jobs, workload, wrkdir=None, filename=None)         
+        return split_workloads(n_jobs, workload, wrkdir=wrkdir, filename=filename)         
         
     
     def launch_fleet(self,
@@ -236,6 +232,7 @@ class InstanceManager:
                      n_instances, 
                      profile, 
                      name=None, 
+                     user_data=None,
                      instance_profile='',
                      monitoring=True,
                      kp_dir=None, 
@@ -267,6 +264,7 @@ class InstanceManager:
                                      profile=profile, 
                                      name=name, 
                                      instance_profile=instance_profile,
+                                     user_data=user_data,
                                      monitoring=monitoring,
                                      kp_dir=kp_dir,
                                      enable_nfs=enable_nfs,
@@ -284,7 +282,6 @@ class InstanceManager:
         if name is not None: 
             self.fleets[spot_fleet_req_id]['name'] = name
     
-        return spot_fleet_req_id
         
     def refresh_fleet_instances(self, fleet_id=None):
         '''Refresh the list of instances for a given fleet. If no fleet is submitted refresh all in self.fleets'''
@@ -294,80 +291,7 @@ class InstanceManager:
             self.fleets[fleet]['instances'] = get_fleet_instances(fleet, self.fleets[fleet]['region'])
 
 
-    def _distribute_jobs_on_fleet(self, spot_fleet_req_id, profile, scripts, uploads=None):
-        '''Assign instances in a fleet to execute specific scripts'''                
-        # Get the number of active instances 
-        num_active_instances = len(self.fleets[spot_fleet_req_id]['instances'])
-        
-        # Wait until the instnaces start activating
-        while num_active_instances == 0: 
-            time.sleep(5)
-            self.refresh_fleet_instances(fleet_id=spot_fleet_req_id)
-            num_active_instances = len(self.fleets[spot_fleet_req_id]['instances'])
-        
-        distributed_jobs = {} 
-        distributed_jobs['assigned_fleet'] = spot_fleet_req_id
-        
-        # Job assignments to fleet instances are organized by script
-        for num, script in enumerate(scripts):
-            distributed_jobs[num] = {} 
-            distributed_jobs[num]['status'] = 'empty'
-            distributed_jobs[num]['script'] = script 
-            if uploads is not None: 
-                distributed_jobs[num]['upload'] = uploads[num]
-
-        empty_jobs = [j for j in distributed_jobs if distributed_jobs[j]['status']=='empty']
-        
-        # Get each instance from the spot fleet 
-        for inum, instance in enumerate(self.fleets[spot_fleet_req_id]['instances']):
-
-            instance_id = instance['InstanceId']
-            
-            # If the instance has not been assigned 
-            if 'assigned' not in instance: 
-                # Assign it an empty job
-                job = empty_jobs[0]
-
-                # Get the first available job 
-                distributed_jobs[job]['instance'] = instance_id        # Assign it the current instance 
-                
-                # Wait for the instance to be initialized                        
-                instance_status = check_instance_initialization(instance_id, region=profile['region'])
-                
-                distributed_jobs[job]['status'] = instance_status
-                
-                self.instances[instance_id] = self.launch_instance(instance_id, instance_id=instance_id, profile=profile)
-                
-                # Once it has been initialized upload the script and make the 
-                if uploads is not None: 
-                    self.instances[instance_id].upload(distributed_jobs[job]['upload'])
-                self.instances[instance_id].run(distributed_jobs[job]['script'], cmd=True)
-                    
-                print('Job %s Launched' % str(job))                
-                empty_jobs.pop(0)
-                
-                self.fleets[spot_fleet_req_id]['instances'][inum]['assigned'] = True                
-
-        return distributed_jobs
-    
-    
-    def monitor_distributed_jobs(self, distributed_jobs):
-        '''Monitor a set of distributed jobs, if any instance should be shut-down and changed, relaunch the corresponding script'''
-        # Distributed jobs dictionary has indices as keys. 
-        # Each index has its script and an assigned index. 
-        
-        spot_fleet_req_id = distributed_jobs['assigned_fleet']
-        
-        # monitor the instances for this spot fleet. 
-        
-        # if the list changes
-        # find the one that has been removed in the distributed jobs 
-        # replace that instance with a connection to the new one. 
-        pass
-        
-
-    
-    def run_distributed_jobs(self, prefix, n_jobs, scripts, profile, instance_profile='', filesystem=None, uploads=None, upload_path='.', use_fleet=False, account_number=None):
+    def run_distributed_jobs(self, account_number, prefix, n_jobs, profile, user_data=None, instance_profile=''):
         '''
         Distribute scripts and workloads across a given number of instances with a given profile
         __________
@@ -376,46 +300,13 @@ class InstanceManager:
         - n_jobs : int. Number of different instances to launch (if use_fleet=True, fleet will request this number of instances).
         - scripts : list. List of scripts formatted as strings (not filenames, the actual bash scripts with new line delimiters), note len(scripts) == n_jobs
         - profile : str. The name of the profile to use for the instances.
-        - filesystem : str. The CreateionToken for the filesystem you want to connect to each instance.
-        - uploads : list. List of filepaths to files you want to upload to each instance, note len(uploads) == n_jobs
-        - upload_path : str. The path on each instance to upload the corresponding file to.
-        - use_fleet : bool. If true, returns distributed_jobs dictionary. Use spot fleet. If spot fleets are used, if an instance is interrupted it will automatically 
-        - account_number : str. If use_fleet == True, this is needed to request a fleet. 
+        - user_data : list. len(user_data) == n_jobs
         '''
+        if user_data is not None: 
+            assert type(user_data)==list
+            assert len(user_data)==n_jobs                            
         
-        if filesystem is not None: 
-            fs = filesystem
-        else: 
-            fs = self.efs
-            
-        try: 
-            assert len(scripts) == n_jobs
-        except: 
-            raise Exception('The number of scripts must be equal to the number of instances')
-
-        if uploads is not None: 
-            try:
-                assert len(uploads)==n_jobs
-            except: 
-                raise Exception('If uploading material to each instance, must provide an equal number of materials and instances')
-                
-        if use_fleet: 
+        for nn in range(n_jobs): 
             # Launch the spot fleet 
-            spot_fleet_req_id = self.launch_fleet(account_number, n_jobs, profile, name=prefix, instance_profile=instance_profile, monitoring=True, kp_dir=self.kp_dir)
-
-            # Assign the scripts to different instances 
-            distributed_jobs = self._distribute_jobs_on_fleet(spot_fleet_req_id, profile, scripts, uploads=uploads)            
-            return distributed_jobs
-
-        else: 
-            # If spot fleet is not enabled launch each instance separately. This takes considerably more time. 
-            for nn in range(n_jobs):                 
-                self.launch_instance(prefix+'_'+str(nn), profile=profile, filesystem=fs, instance_profile=instance_profile, efs_mount=None, new_mount=None)
-    
-                if uploads is not None: 
-                    self.instances[prefix+'_'+str(nn)].upload(uploads[nn], upload_path)
-    
-                self.instances[prefix+'_'+str(nn)].run(scripts[nn], cmd=True)            		
-                
-                clear_output(wait=True)
-                print('Job %s Launched' % str(nn))
+            self.launch_fleet(account_number, 1, profile, name=prefix, user_data=user_data[nn], instance_profile=instance_profile, monitoring=True, kp_dir=self.kp_dir)    
+            

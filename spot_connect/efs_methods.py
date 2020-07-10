@@ -170,15 +170,25 @@ def retrieve_efs_mount(file_system_name, instance, new_mount=False, region='us-w
     return mount_target, instance_dns, filesystem_dns
 
 
-def compose_mount_script(filesystem_dns):
+def get_filesystem_dns(file_system_name, region):
+    # Launch or connect to an EFS 
+    file_system = launch_efs(file_system_name, region=region)                  
+    file_system_id = file_system['FileSystemId']
+
+    filesystem_dns = file_system_id+'.efs.'+region+'.amazonaws.com'
+
+    return filesystem_dns
+
+
+def compose_mount_script(filesystem_dns, base='/home/ec2-user', script=''):
     '''Create a script of linux commands that can be run on an instance to connect an EFS'''
     
-    script = ''
-    script+='mkdir ~/efs &> /dev/null'+'\n'
-    script+='sudo mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport '+filesystem_dns+':/   ~/efs '+'\n'
-    script+='cd ~/efs'+'\n'
+    script+='mkdir '+base+'/efs'+'\n'
+    script+='sudo mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport '+filesystem_dns+':/   '+base+'/efs '+'\n'
+    script+='cd '+base+'/efs'+'\n'
+    # go-rwx removes read, write, execute permissions from the group and other users. It will not change permissions for the user that owns the file.
     script+='sudo chmod go+rw .'+'\n'
-    script+='mkdir ~/efs/data &> /dev/null'+'\n'
+    script+='echo MOUNTED\n'
                     
     return script 
 

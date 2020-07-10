@@ -24,6 +24,7 @@ def launch_spot_fleet(account_number,
                       n_instances, 
                       profile, 
                       name=None,
+                      user_data=None, 
                       instance_profile='',
                       monitoring=True,
                       kp_dir=None,
@@ -91,6 +92,8 @@ def launch_spot_fleet(account_number,
         launch_specs[0]['IamInstanceProfile']= {                              # Define the IAM role for your instance 
                      'Name': instance_profile,                                       
         }
+    if user_data is not None: 
+        launch_specs[0]['UserData']= user_data
         
     response = client.request_spot_fleet(
         DryRun=False,
