@@ -24,7 +24,7 @@ import argparse, sys, time, os
 
 root = Path(os.path.dirname(os.path.abspath(__file__)))
 
-from spot_connect import sutils, ec2_methods, iam_methods, efs_methods, instance_methods
+from spot_connect import sutils, ec2_methods, iam_methods, efs_methods, instance_methods, bash_scripts
 
 def main():                                                     # Main execution 
     
@@ -138,7 +138,7 @@ def main():                                                     # Main execution
             raise e 
             sys.exit(1)        
         print('Connecting to instance to link EFS...')
-        instance_methods.run_script(instance, profile['username'], efs_methods.compose_mount_script(filesystem_dns), kp_dir=kp_dir, cmd=True)
+        instance_methods.run_script(instance, profile['username'], bash_scripts.compose_mount_script(filesystem_dns), kp_dir=kp_dir, cmd=True)
             
     st = time.time() 
 

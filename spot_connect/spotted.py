@@ -16,7 +16,7 @@ from path import Path
 
 root = Path(os.path.dirname(os.path.abspath(__file__)))
 
-from spot_connect import sutils, ec2_methods, iam_methods, efs_methods, instance_methods
+from spot_connect import sutils, ec2_methods, iam_methods, efs_methods, instance_methods, bash_scripts
 from spot_connect.bash_scripts import update_git_repo
 
 class SpotInstance: 
@@ -90,7 +90,7 @@ class SpotInstance:
         - kp_dir : string. path name for where to store the key pair files 
         - sec_group : string. name of the security group to use
         - efs_mount : bool. (for advanced use) If True, attach EFS mount. If no EFS mount with the name <filesystem> exists one is created. If filesystem is None the new EFS will have the same name as the instance  
-        - newmount : bool. (for advanced use) If True, create a new mount target on the EFS, even if one exists. If False, will be set to True if file system is submitted but no mount target is detected.
+        - new_mount : bool. (for advanced use) If True, create a new mount target on the EFS, even if one exists. If False, will be set to True if file system is submitted but no mount target is detected.
         - firewall : str. Firewall settings
         '''
 
@@ -104,11 +104,16 @@ class SpotInstance:
 
         self.profile = None 
 
+        profiles=sutils.load_profiles()         
+
         if profile is None: 
-            raise Exception('Must specify a profile')  
+            if not self.using_id:
+                raise Exception('Must specify a profile')  
+            else:
+                self.profile = profiles[list(profiles.keys())[0]]
         else: 
             self.profile=copy.deepcopy(SpotInstance.profiles[profile])        
-        
+
         if key_pair is not None:
             self.profile['key_pair']=(key_pair, key_pair+'.pem')
 
@@ -189,31 +194,27 @@ class SpotInstance:
             print('Requesting EFS mount...')            
             fs_name = self.filesystem                 
             try:                                
-                self.mount_target, self.instance_dns, self.filesystem_dns = efs_methods.retrieve_efs_mount(fs_name, self.instance, new_mount=self.newmount, region=self.profile['region'])
+                self.mount_target, self.instance_dns, self.filesystem_dns = efs_methods.retrieve_efs_mount(fs_name, self.instance, new_mount=self.new_mount, region=self.profile['region'])
             except Exception as e: 
                 raise e 
                 sys.exit(1)        
             print('Connecting instance to link EFS...')
-            instance_methods.run_script(self.instance, self.profile['username'], efs_methods.compose_mount_script(self.filesystem_dns), kp_dir=self.kp_dir, cmd=True)
+            instance_methods.run_script(self.instance, self.profile['username'], bash_scripts.compose_mount_script(self.filesystem_dns), kp_dir=self.kp_dir, cmd=True)
         
         # Automatically Run Scripts 
         st = time.time()
         
-        scripts_to_run = []
-        if scripts is not None:
-            if len(scripts) > 0: 
-                scripts_to_run += scripts
-                
-        for script in profile['scripts'] + scripts: 
-            print('\nExecuting script "%s"...' % str(script))
-            try: 
-                if not instance_methods.run_script(self.instance, self.profile['username'], script, kp_dir=self.kp_dir):
-                    break
-            except Exception as e:
-                print(str(e))
-                print('Script %s failed with above error' % script)
-                
-            print('Time to run script: %s' % str(time.time()-st))
+        if scripts is not None: 
+            for script in scripts: 
+                print('\nExecuting script "%s"...' % str(script))
+                try: 
+                    if not instance_methods.run_script(self.instance, self.profile['username'], script, kp_dir=self.kp_dir):
+                        break
+                except Exception as e:
+                    print(str(e))
+                    print('Script %s failed with above error' % script)
+                    
+                print('Time to run script: %s' % str(time.time()-st))
                     
         self.state = self.instance['State']['Name']
 

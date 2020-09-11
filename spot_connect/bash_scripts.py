@@ -15,7 +15,7 @@ MIT License 2020
 import base64
 
 
-def init_userdata_script():
+def init_userdata_script(python3=True):
     '''Initialize a script to use with for the linux instance user_data.     
     For more information on submitting user_data to EC2 instance visit https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html.     
     The cloud-init output log file (/var/log/cloud-init-output.log) captures console output so it is easy to debug your scripts following a launch if the instance does not behave the way you intended.
@@ -29,140 +29,139 @@ def script_to_userdata(script):
     return base64.b64encode(bytes(str(script), 'utf-8')).decode('ascii')
 
 
-def compose_s3_sync_script(source, dest, instance_path, logfile='s3_sync_log', command=''):
-    '''This script syncs an instance and s3 and then shuts down the instance.'''
+def run_command_as_user(command:str, user:str, delimiter:str):
+    '''Runs the given command as the "user" on a linux command line'''
+    return 'sudo runuser -l '+user+" -c '"+command+"'"+delimiter
+
+
+def compose_s3_sync_script(source, dest, instance_path, logfile='s3_sync_log', delimiter='\n', script=''):
+    '''Syncs an instance and s3 and then shuts down the instance.'''
     
     # Run the aws s3 sync command in the background and send the output to download_<didx>.txt
-    command +='nohup aws s3 sync '+source+' '+dest+' &> '+instance_path+'/'+logfile+'.txt &\n'
+    script +='nohup aws s3 sync '+source+' '+dest+' &> '+instance_path+'/'+logfile+'.txt &'+delimiter
     # Get the job id for the last command
-    command +='curpid=$!\n'
+    script +='curpid=$!'+delimiter
     # When the job with the given job id finishes, shut down and terminate the instance
-    command +="nohup sh -c 'while ps -p $0 &> /dev/null; do sleep 10 ; done && sudo shutdown -h now ' $curpid &> s3_transfer.txt &\n"
+    script +="nohup sh -c 'while ps -p $0 &> /dev/null; do sleep 10 ; done && sudo shutdown -h now ' $curpid &> s3_transfer.txt &"+delimiter  
     
-    return command
+    return script
     
 
-def update_git_repo(repo_path, branch=None, repo_link=None, command=''):
+def update_git_repo(repo_path, branch=None, repo_link=None, delimiter='\n', script=''):
     '''Update the github repo at the given path. Use the repo_link arg for private repos that require authentication details'''
-
-    command +='cd '+repo_path+'\n'
+    
+    script +='cd '+repo_path+delimiter
     if branch is not None: 
-        command +='git checkout '+branch+'\n'
+        script +='git checkout '+branch+delimiter
     if repo_link is None:
-        command += 'git pull origin'
+        script += 'git pull origin'
     else:
-        command+='git pull '+repo_link+'\n'
+        script+='git pull '+repo_link+delimiter
+        
+    return script
 
-    return command
 
-
-def install_ta_lib(download=False, command=''):
+def install_ta_lib(download=False, install_as_user=None, delimiter='\n', script=''):
     '''Download (optional) and install ta-lib. The ta-lib folder must be in the wd'''
     if download: 
-        command += 'wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz\n'
-        command += 'tar -xzf ta-lib-0.4.0-src.tar.gz\n'
+        script += 'wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz'+delimiter
+        script += 'tar -xzf ta-lib-0.4.0-src.tar.gz'+delimiter
+        
     # Install ta-lib
-    command+= 'cd ta-lib/\n'
-    command+= 'sudo ./configure\n'
-    command+= 'sudo make\n'
-    command+= 'sudo make install\n'
-    command+= 'pip install ta-lib\n'
+    script+= 'cd ta-lib/'+delimiter
+    script+= 'sudo ./configure'+delimiter
+    script+= 'sudo make'+delimiter
+    script+= 'sudo make install'+delimiter
+    if install_as_user is None: 
+        script+= 'pip install ta-lib'+delimiter
+    else: 
+        script+= 'sudo runuser -l '+install_as_user+" -c 'pip install ta-lib'"+delimiter
+
     # Return to the working directory 
-    command+= 'cd ..\n'    
-    command+= 'echo INSTALLEDTALIB\n'
+    script+= 'cd ..'+delimiter
+    script+= 'echo "Installed ta-lib"'+delimiter
+    script+= '\n'
 
-    return command 
+    return script 
 
 
-def run_file(py_filepath, 
-             args='',
-             logname='',
-             command=''):
-    command += 'python '+py_filepath+' '+args+' '+logname+'\n'
-    return command
+def compose_mount_script(filesystem_dns, base='/home/ec2-user', delimiter='\n', script=''):
+    '''Create a script of linux commands that can be run on an instance to connect an EFS'''
     
+    script+='mkdir '+base+'/efs'+delimiter
+    script+='sudo mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport '+filesystem_dns+':/   '+base+'/efs '+delimiter
+    script+='cd '+base+'/efs'+delimiter
+    # go-rwx removes read, write, execute permissions from the group and other users. It will not change permissions for the user that owns the file.
+    script+='sudo chmod go+rw .'+delimiter
+    script+='echo EFS Mounted'+delimiter
+    script+='\n'
+                    
+    return script 
 
-def run_file_then_shutdown(py_filepath, 
-                           args='', 
-                           logname='',
-                           command=''):
+
+def shutdown_instance_after_command(command:str, command_log='', run_as_user='', delimiter='\n', script=''):
     '''
-    Execute a python script and shut down the instance when its done. Run the job in such a way that it continues to run even if the user logs in and out of the instance.
+    Run a command and shut down the instance after the command has completed running (use this to run a python script, for example).
+    This method is inteneded for use in scripts submitted as <user_data> to instances (i.e. run as root at the start of each script). 
+    To check the output of the user_data script, log onto the instance and view the "/var/log/cloud-init-output.log" file. 
     __________
     parameters
-    - py_filepath : str. Filepath ending in .py that you want to execute 
-    - args : str. arguments for the file. 
-    - logname : str. filepath to a log file where the output of the python file can be stored. 
-    - command : existing script to add to.     
+    - command : str. The command you want to run on the instance. 
+    - command_log : str. Path and/or name of a .txt file that will store the command output on the instance. 
+    - run_as_user : str. If submitted, the command will be run as this user on the instance. 
+    - delimited : str. Default delimiter on the script. 
+    - script : str. Script as string. 
     '''
                       
-    if logname != '': 
-        logname = '> '+logname+' &'
-                                       # In the project folder we want to run the script that will execute the apr recognition 
-    command+= 'nohup python '+py_filepath+' '+args+' &'+logname+'\n'
-    command+= 'curpid=$!\n'
+    if command_log != '': 
+        logname = '> '+command_log
+    else: 
+        logname = '' 
+
+    if run_as_user=='': 
+        script += command+logname+delimiter
+    else: 
+        script += run_command_as_user(command, run_as_user, '')+logname+delimiter
     
     # Wait until the previous job is done and then shutdown the instance 
-    command+= "nohup sh -c 'while ps -p $0 &> /dev/null; do sleep 10 ; done && sudo shutdown -h now ' $curpid &> run.txt &\n"
+    script+= "nohup sh -c 'while ps -p $0 &> /dev/null; do sleep 10 ; done && sudo shutdown -h now ' $curpid &> run.txt &"
 
-    return command    
+    return script    
 
 
-def run_file_then_reduce_fleet(py_filepath, args='', logname='', region='us-east-2', command=''):
-    '''Runs a python script and then reduces spot fleet capacity and terminates itself. If fleet capacity is 1, cancels fleet request'''
+def cancel_fleet_after_command(command:str, region:str, command_log='', run_as_user='', delimiter='\n', script=''):
+    '''
+    Run a command and then cancel the spot fleet request that requested the current instance. The instance is terminated as a result of this cancelation request as well.
+    This method is inteneded for use in scripts submitted as <user_data> to instances (i.e. run as root at the start of each script). 
+    To check the output of the user_data script, log onto the instance and view the "/var/log/cloud-init-output.log" file. 
+    __________
+    parameters
+    - command : str. The command you want to run on the instance. 
+    - command_log : str. Path and/or name of a .txt file that will store the command output on the instance. 
+    - run_as_user : str. If submitted, the command will be run as this user on the instance. 
+    - delimited : str. Default delimiter on the script. 
+    - script : str. Script as string. 
+    '''
+        
+    if command_log != '': 
+        logname = '> '+command_log
+    else: 
+        logname = '' 
 
-    if logname != '': 
-        logname = '> '+logname
-
-    command += 'INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)\n'
-    command += 'INSTANCE_AZ=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)\n'
-    command += 'AWS_REGION="'+region+'"\n'    
-
-    command += 'if [ $INSTANCE_ID ]; then\n'
-    command += 'python '+py_filepath+' '+args+' '+logname+'\n'
-    command += 'fi\n' 
-                                                                                                               # Needed to include the right " and ' characters here 
-    command += 'SPOT_FLEET_REQUEST_ID=$(aws ec2 describe-spot-instance-requests --region $AWS_REGION --filter "Name=instance-id,Values='+"'$INSTANCE_ID'"+'" --query "SpotInstanceRequests[].Tags[?Key=='+"'aws:ec2spot:fleet-request-id'"+'].Value[]" --output text)\n'
-    command += 'SPOT_FLEET_CAPACITY=$(aws ec2 describe-spot-fleet-requests --spot-fleet-request-ids $SPOT_FLEET_REQUEST_ID --region $AWS_REGION --query "SpotFleetRequestConfigs[0].SpotFleetRequestConfig.TargetCapacity")\n'
-
-    # If the spot fleet capacity is greater than 1 then reduce the capacity by 1, wait a moment, then terminate the instance.  
-    command += 'if [ $SPOT_FLEET_CAPACITY -gt 1 ] ; then\n'    
-    command += '    MODIFIED_CAPACITY=$((SPOT_FLEET_CAPACITY - 1))\n'    
-    command += '    aws ec2 modify-spot-fleet-request --target-capacity $MODIFIED_CAPACITY --spot-fleet-request-id $SPOT_FLEET_REQUEST_ID --region $AWS_REGION\n'    
-    command += '    sleep 5\n'
-    command += '    sudo shutdown -h now\n'
-    command += 'fi\n'
+    script += 'INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)'+delimiter
     
-    command += 'if [ $SPOT_FLEET_CAPACITY = 1 ] ; then\n'    
-    command += '    aws ec2 cancel-spot-fleet-requests --region $AWS_REGION --spot-fleet-request-ids $SPOT_FLEET_REQUEST_ID --terminate-instances\n'
-    command += 'fi'
+    script += 'AWS_REGION="'+region+'"'+delimiter
+    script += 'SPOT_FLEET_REQUEST_ID=$(aws ec2 describe-spot-instance-requests --region $AWS_REGION --filter "Name=instance-id,Values='+"'$INSTANCE_ID'"+'" --query "SpotInstanceRequests[].Tags[?Key=='+"'aws:ec2spot:fleet-request-id'"+'].Value[]" --output text)'+delimiter
     
-    return command 
-
-
-
-
-
-
-#
-#    
-
-# If spot fleet capacity is greater than 1: 
-    # reduce the capacity by 1 
+    if run_as_user=='': 
+        script += command+logname+delimiter
+    else: 
+        script += run_command_as_user(command, run_as_user, '')+logname+delimiter
+       
+    script += 'mkdir dontgivenofucks'+delimiter
+         
+    script += 'aws ec2 cancel-spot-fleet-requests --region $AWS_REGION --spot-fleet-request-ids $SPOT_FLEET_REQUEST_ID --terminate-instances'
     
-    # modify spot fleet fleet to new capacity 
-    
-# If spot fleet capacity is 1: 
-    # cancel spot fleet request 
+    return script 
 
 
-#
-#
-#
-#  modify-spot-fleet-request
-#[--excess-capacity-termination-policy <value>]
-#--spot-fleet-request-id <value>
-#[--target-capacity <value>]
-#[--on-demand-target-capacity <value>]
-#[--cli-input-json <value>]
-#[--generate-cli-skeleton <value>]

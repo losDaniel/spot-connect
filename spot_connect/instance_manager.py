@@ -23,6 +23,10 @@ from spot_connect.bash_scripts import compose_s3_sync_script
 from spot_connect.fleet_methods import launch_spot_fleet, get_fleet_instances
 from spot_connect.efs_methods import launch_efs
 
+import time
+from IPython.display import clear_output
+
+
 # TODO : Add bash script to reduce spot fleet capacity. Or check that, if its going to reduce it to zero, to cancel it. 
 
 class InstanceManager:
@@ -237,7 +241,8 @@ class InstanceManager:
                      monitoring=True,
                      kp_dir=None, 
                      enable_nfs=True,
-                     enable_ds=True):
+                     enable_ds=True,
+                     return_fid=False):
         '''
         Launch a spot fleet and store it in the LinkAWS.fleets dict attribute. 
         Each item has as the key a fleet id and as the value a dictionary the key 'instances' with its respective instances and the key 'name' if a name was submitted. 
@@ -282,13 +287,23 @@ class InstanceManager:
         if name is not None: 
             self.fleets[spot_fleet_req_id]['name'] = name
     
+        if return_fid:
+            return spot_fleet_req_id
         
-    def refresh_fleet_instances(self, fleet_id=None):
+    def refresh_fleet_instances(self, fleet_id=None, region=None):
         '''Refresh the list of instances for a given fleet. If no fleet is submitted refresh all in self.fleets'''
         if fleet_id is not None: 
-            self.fleets[fleet_id]['instances'] = get_fleet_instances(fleet_id, self.fleets[fleet_id]['region'])
+            if fleet_id not in self.fleets:
+                self.fleets[fleet_id] = {} 
+            if region is None: 
+                self.fleets[fleet_id]['instances'] = get_fleet_instances(fleet_id, self.fleets[fleet_id]['region'])
+            else: 
+                self.fleets[fleet_id]['instances'] = get_fleet_instances(fleet_id, region)
         for fleet in self.fleets: 
-            self.fleets[fleet]['instances'] = get_fleet_instances(fleet, self.fleets[fleet]['region'])
+            if region is None: 
+                self.fleets[fleet]['instances'] = get_fleet_instances(fleet, self.fleets[fleet]['region'])
+            else: 
+                self.fleets[fleet_id]['instances'] = get_fleet_instances(fleet_id, region)
 
 
     def run_distributed_jobs(self, account_number, prefix, n_jobs, profile, user_data=None, instance_profile=''):
@@ -308,5 +323,49 @@ class InstanceManager:
         
         for nn in range(n_jobs): 
             # Launch the spot fleet 
-            self.launch_fleet(account_number, 1, profile, name=prefix, user_data=user_data[nn], instance_profile=instance_profile, monitoring=True, kp_dir=self.kp_dir)    
-            
+            assert account_number is not None 
+            if user_data is None: 
+                self.launch_fleet(account_number, 1, profile, name=prefix, instance_profile=instance_profile, monitoring=True, kp_dir=self.kp_dir)                    
+            else:
+                self.launch_fleet(account_number, 1, profile, name=prefix, user_data=user_data[nn], instance_profile=instance_profile, monitoring=True, kp_dir=self.kp_dir)    
+
+
+    def setup_fleet(self, account_number, prefix, n_jobs, profile, instance_profile='', return_fid=True): 
+        assert account_number is not None
+        fid = self.launch_fleet(account_number, n_jobs, profile, name=prefix, instance_profile=instance_profile, monitoring=True, kp_dir=self.kp_dir, return_fid=return_fid)
+        return fid
+
+    def get_fleet_iids(self, fid=None, region=None):
+        self.refresh_fleet_instances(fleet_id=fid, region=region)
+        fleet_instances = {} 
+        if fid is not None: 
+            fleet_instances[fid] = []
+            for active_instance in self.fleets[fid]['instances']['ActiveInstances']:
+                fleet_instances[fid].append(active_instance['InstanceId'])
+        else: 
+            for fid in self.fleets: 
+                fleet_instances[fid] = []
+                for active_instance in self.fleets[fid]['instances']['ActiveInstances']:
+                    fleet_instances[fid].append(active_instance['InstanceId'])
+        
+        return fleet_instances
+    
+    def distribute_scripts_on_instances(self, instance_ids, scripts):        
+        for inum, iid in enumerate(instance_ids): 
+            clear_output()
+            self.launch_instance(iid, instance_id=True, scripts=[scripts[inum]])
+                        
+
+    def run_sloppy_distributed_jobs(self, account_num, prefix, n_jobs, profile, region, scripts, instance_profile='', boot_wait_time=5):
+                
+        fid = self.setup_fleet(account_num, prefix, n_jobs, profile, instance_profile=instance_profile, return_fid=True)
+
+        fleet_instances = [] 
+        while len(fleet_instances)==0: 
+            time.sleep(boot_wait_time)
+
+            fleet_instances = self.get_fleet_iids(fid=fid, region=region)
+            fleet_instances = fleet_instances[fid]
+
+        self.distribute_scripts_on_instances(fleet_instances,
+                                             scripts)                                   

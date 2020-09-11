@@ -180,15 +180,3 @@ def get_filesystem_dns(file_system_name, region):
     return filesystem_dns
 
 
-def compose_mount_script(filesystem_dns, base='/home/ec2-user', script=''):
-    '''Create a script of linux commands that can be run on an instance to connect an EFS'''
-    
-    script+='mkdir '+base+'/efs'+'\n'
-    script+='sudo mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport '+filesystem_dns+':/   '+base+'/efs '+'\n'
-    script+='cd '+base+'/efs'+'\n'
-    # go-rwx removes read, write, execute permissions from the group and other users. It will not change permissions for the user that owns the file.
-    script+='sudo chmod go+rw .'+'\n'
-    script+='echo MOUNTED\n'
-                    
-    return script 
-

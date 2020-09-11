@@ -332,8 +332,9 @@ https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html
 The cloud-init output log file (/var/log/cloud-init-output.log) captures console output so it is easy to debug your scripts following a launch if the instance does not behave the way you intended.
 
 
-
-
+https://github.com/losDaniel/Day-Trader/issues/269
+- Debugging user_data file: `cat /var/log/cloud-init-output.log`
+- Making sure you python module directories are read by the user_data. 
 
 
 
