@@ -21,7 +21,7 @@ from spot_connect.bash_scripts import update_git_repo
 
 class SpotInstance: 
     
-    profiles=sutils.load_profiles()         
+    profiles=None
 
     name            =   None 
     instance_id     =   None 
