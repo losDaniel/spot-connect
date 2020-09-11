@@ -3,13 +3,11 @@ Author: Carlos Valcarcel <carlos.d.valcarcel.w@gmail.com>
 
 This file is part of spot-connect
 
-Toolbox for launching an AWS spot instance: 
+Toolbox for launching an AWS spot instance - s3_methods.py: 
 
-This package consists mainly of the boto3 functions that are used to request, 
-launch and interact with a spot instance. These functions are used in the 
-spot_connect.py script which can be launched from the command line or the 
-spotted class which can be run from a notebook or python script
-
+The s3_methods sub-module contains functionalized tasks that use boto3 to 
+interact with objects on s3. 
+    
 MIT License 2020
 """
 

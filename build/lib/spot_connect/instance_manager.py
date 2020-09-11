@@ -18,20 +18,29 @@ root = Path(os.path.dirname(os.path.abspath(__file__)))
 
 from spot_connect import sutils 
 from spot_connect import spotted 
-from spot_connect.sutils import genrs, load_profiles
+from spot_connect.sutils import genrs, load_profiles, split_workloads
+from spot_connect.bash_scripts import compose_s3_sync_script
+from spot_connect.fleet_methods import launch_spot_fleet, get_fleet_instances
+from spot_connect.efs_methods import launch_efs
 
+import time
 from IPython.display import clear_output
+
+
+# TODO : Add bash script to reduce spot fleet capacity. Or check that, if its going to reduce it to zero, to cancel it. 
 
 class InstanceManager:
     
     efs = None 
     kp_dir = None 
-    monitor = None 
     instances = None 
+    fleets = None 
     
     def __init__(self, kp_dir=None, efs=None): 
         '''
-        
+        The InstanceManager class provides a number of shortcuts for managing ec2 instances. 
+        These functions range from requesting instances on AWS to setting up distributed 
+        workloads. 
         __________
         parameters
         - kp_dir : str. Key pair directory, if none is submitted default spot-connect directory will be used. 
@@ -60,74 +69,78 @@ class InstanceManager:
         	self.efs = None 
         else: 
         	self.efs = efs 
-
-        self.monitor = None   
-        self.downloader = None           
         
-        self.instances = {} 
+        self.instances = {}
+        self.fleets = {} 
 
-    def list_profiles(self):
+    def list_all_profiles(self):
         return load_profiles() 
 
-    def launch_instance(self, 
-                        name, 
-                        profile=None, 
-                        filesystem=None,
-                        kp_dir=None, 
-                        monitoring=None, 
-                        efs_mount=None,
-                        new_mount=None, 
-                        instance_profile=None
-                        ): 
+    def launch_instance(self,
+                        name           :   str,
+                        instance_id    :   bool  = False,
+                        profile        :   str   = None, 
+                        key_pair       :   str   = None, 
+                        kp_dir         :   str   = None,
+                        security_group :   str   = None, 
+                        instance_profile : str   = '', 
+                        efs_mount      :   bool  = False, 
+                        firewall       :   tuple = None, 
+                        image_id       :   str   = None, 
+                        price          :   float = None, 
+                        region         :   str   = None, 
+                        scripts        :   list  = None, 
+                        username       :   str   = None,
+                        filesystem     :   str   = None,
+                        new_mount      :   bool  = False, 
+                        monitoring     :   bool  = False): 
         '''        
         Launch a spot instance and store it in the LinkAWS.instances dict attribute. 
         Default parameters are the same as for the spotted.SpotInstance Class. 
-        __________
-        parameters
-        - name : string. name of the spot instance
-        - profile : dict of settings for the spot instance
-        - filesystem : string, default <name>. creation token for the EFS you want to 
-                       connect to the instance  
-        - kp_dir : string. path name for where to store the key pair files 
-        - monitoring : bool, default True. set monitoring to True for the instance 
-        - efs_mount : bool. If True, attach EFS mount. If no EFS mount with the name 
-                      <filesystem> exists one is created. If filesystem is None the new 
-                      EFS will have the same name as the instance  
-        - newmount : bool. If True, create a new mount target on the EFS, even if one exists
-        - instance_profile : str. Instance profile with attached IAM roles
-        '''
-        
+        For parameter descriptions use: help(spot_connect.spotted.SpotInstance)
+        '''        
         if kp_dir is None:
             kp_dir = self.kp_dir
         if filesystem is None: 
             filesystem = self.efs
     
         instance = spotted.SpotInstance(name, 
-                                        profile=profile, 
-                                        filesystem=filesystem,
+                                        instance_id=instance_id,
+                                        profile=profile,
+                                        key_pair=key_pair,
                                         kp_dir=kp_dir,
-                                        monitoring=monitoring,
-                                        efs_mount=efs_mount,
-                                        newmount=new_mount,
+                                        security_group=security_group,
                                         instance_profile=instance_profile,
-                                        )
+                                        efs_mount=efs_mount,
+                                        firewall=firewall,
+                                        image_id=image_id,
+                                        price=price,
+                                        region=region,
+                                        scripts=scripts,
+                                        username=username,
+                                        filesystem=filesystem,
+                                        new_mount=new_mount,
+                                        monitoring=monitoring)
         self.instances[name] = instance
-
+        
 
     def show_instances(self): 
+        '''Show the attached instances and their status'''
         display_dict = {} 
+
         for key in self.instances: 
             self.instances[key].refresh_instance(verbose=False)
-            display_dict[key] = self.instances[key].instance['State']['Name']
+            display_dict[key] = self.instances[key].instance['State']['Name']        
+
         print(display_dict)
 
 
-    def launch_monitor(self, instance_name='monitor', profile='t2.micro'):
+    def quick_launch(self, instance_name='monitor', profile='t2.micro'):
         '''
-        Will launch the cheapest possible instance to use as a monitor. 
+        Will launch the cheapest possible instance with a unique name. 
         
         The instance can be used to submit commands directly. For example, to list the folders in a directory in the efs just submit: 
-           self.monitor.run('ls /efs/database/', cmd=True)
+           self.instances[<name>].run('ls /efs/database/', cmd=True)
            
 		You can connect your command prompt to the instance using $ spot_connect -n <instance_name> -a True
         __________
@@ -135,41 +148,20 @@ class InstanceManager:
         - instance_name : str. if the instance fails to connect submit a new name (check if any old keys are present in your awsdir)
         - profile : spot_connect.py profile you want to use. default is "default"
         '''
-        self.monitor = spotted.SpotInstance(instance_name+'_'+genrs(), profile=profile, filesystem=self.efs, kp_dir=self.kp_dir)
-        self.instances['monitor'] = self.monitor 
-
-    def terminate_monitor(self):
-        '''Terminate the monitor instance'''
-        self.monitor.terminate()
-
+        iname = instance_name+'_'+genrs(length=3)
+        print('Instance name is:', iname)
+        self.instances[iname] = spotted.SpotInstance(iname, profile=profile, filesystem=self.efs, kp_dir=self.kp_dir)
+        
 
     def terminate(self, instance_name):
+        '''Terminate the given instance'''
         self.instances[instance_name].terminate()
 
 
-    def count_cores(self, instance):
-        instance.upload(os.path.abspath(root)+'\\core_count.py', '.')
-        cores = instance.run('python core_count.py', cmd=True, return_output=True)
-        return cores
-
-
-    def get_instance_home_directory(self, instance=None):
-    	'''
-    	Return the home directory for an instance
-		__________
-		parameters
-		- instance : spotted.SpotInstance object. if None will use self.monitor 
-    	'''
-    	if instance is None: 
-    		if self.monitor is None: 
-    			raise Exception('No Instance. Use self.launch_monitor() or submit an instance')
-    		else: 
-    			itc = self.monitor 
-    	else: 
-    		itc = instance
-
-    	output = itc.run('pwd', cmd=True, return_output=True)
-    	return output 
+    def create_elastic_file_system(self, system_name, region):
+        '''Create an elastic file system with the given system name in the given region. If the file system already exists that one will be returned'''        
+        file_system = launch_efs(system_name, region=region)
+        return file_system
 
 
     def instance_s3_transfer(self, source, dest, instance_profile, efs=None, instance_name=None):
@@ -188,7 +180,7 @@ class InstanceManager:
         
         if efs is None:
             if self.efs is None:
-                answer = ('You have not specified an EFS, if either your source or destination are in your efs this will return an error. Do you want to continue? (Y/N)')
+                answer = ('You have not specified an EFS, the instance will shut down after the sync and your data may not persist. Do you want to continue (Y)? ')
                 if answer == "Y":
                     fs = None
                 else:
@@ -198,15 +190,15 @@ class InstanceManager:
         else:
             fs = efs
             
-        didx = genrs()
-
+        didx = genrs(length=3)
         if instance_name is None: 
             iname = 'downloader_'+didx
         else: 
             iname = instance_name
             
-        self.downloader = spotted.SpotInstance(iname, profile='t3.small', filesystem=fs, kp_dir=self.kp_dir, instance_profile=instance_profile)
+        self.instances[iname] = spotted.SpotInstance(iname, profile='t3.small', filesystem=fs, kp_dir=self.kp_dir, instance_profile=instance_profile)
         
+        # Check whether the s3 bucket is the source or destination 
         if 's3://' in source: 
             instance_file_exists, instance_path, bucket_path = self.downloader.dir_exists(dest), dest, source 
         elif 's3://' in dest:
@@ -222,92 +214,158 @@ class InstanceManager:
             bucket_path_exists = s3.Bucket(bucket_path.replace('s3://','')) in s3.buckets.all()
         if not bucket_path_exists:
             raise Exception(bucket_path+' was not found in S3')
+
 		# If both the bucket and instance path are OK we begin the sync 
         else: 
-	        command = ''
-	        # Run the aws s3 sync command in the background and send the output to download_<didx>.txt
-	        command +='nohup aws s3 sync '+source+' '+dest+' &> '+instance_path+'/'+iname+'.txt &\n'
-	        # Get the job id for the last command
-	        command +='curpid=$!\n'
-	        # When the job with the given job id finishes, shut down and terminate the instance  
-	        command +="nohup sh -c 'while ps -p $0 &> /dev/null; do sleep 10 ; done && sudo shutdown -h now ' $curpid &> s3_transfer.txt &\n"
+            command = compose_s3_sync_script(source, dest, instance_path, logfile=iname)
 
-        self.downloader.run(command, cmd=True)
+        self.instances[iname].run(command, cmd=True)
 
         print('Files and directories from '+source+' are being is being synced to '+dest+' on the instance "'+iname+'"') 
         print('The instance will be shutdown and terminated when the job is complete.')
-        print('Use the following to check progress: SpotInstance("'+iname+'").run("cat '+instance_path+'/'+iname+'.txt", cmd=True)')
+        print('Use the following to check progress: SpotInstance("'+iname+'").run("cat '+instance_path+'/'+iname+'.txt", cmd=True)')        
         
-
-    def clone_repo(self, instance, repo_link, directory='/home/ec2-user/efs/'):
-        '''
-		Clone a git repo to the instance. Must specify a directory and target folder on the instance. This is so that organization on the instance is actively tracked by the user. 
-
-		Private Repos - the links for private repositories should be formatted as: https://username:password@github.com/username/repo_name.git
-		__________
-		parameters
-		- instance : spotted.SpotInstance. The specific instance in which to clone the repo 
-		- repo_link : str. Git repo link. The command executed is: git clone <repo_link> <path>
-		- directory : str. Instance directory to place the target folder and git repo. If directory is '.' target folder will be created in the home directory. To view the home directory for a given instance use the LinkAWS.get_instance_home_directory method
-		'''
-        proceed = instance.dir_exists(directory)
-        if proceed:				
-            instance.run('cd '+directory+'\ngit clone '+repo_link+'', cmd=True)
-        else:
-            raise Exception(str(directory)+' directory was not found on instance')
-            
+        
+    def split_workload(self, n_jobs, workload, wrkdir=None, filename=None): 
+        '''Split a list into n_job chunks and save each chunk, return the list of filenames'''        
+        return split_workloads(n_jobs, workload, wrkdir=wrkdir, filename=filename)         
+        
     
-    def update_repo(self, instance, instance_path, branch='master', repo_link=None):
+    def launch_fleet(self,
+                     account_number,
+                     n_instances, 
+                     profile, 
+                     name=None, 
+                     user_data=None,
+                     instance_profile='',
+                     monitoring=True,
+                     kp_dir=None, 
+                     enable_nfs=True,
+                     enable_ds=True,
+                     return_fid=False):
         '''
-		Update a given local repo to match the remote  
-		__________
-		parameters
-		- instance : spotted.SpotInstance. The specific instance to use 
-		- instance_path : str. The path to the local repo folder in the instance 
-		- branch : str. switch to this branch of the repo 
-		- repo_link : str. Mainly for private repos. In order to git pull a private repo you must submit a link of the format https://username:password@github.com/username/repo_name.git 
-		'''
-        proceed = instance.dir_exists(instance_path)
-        if proceed:
-            command = ''
-            command +='cd '+instance_path+'\n'
-            command +='git checkout '+branch+'\n'
-            if repo_link is None:
-                command+='git pull origin '+branch+'\n'
-            else:
-                command+='git pull '+repo_link+'\n'
-            instance.run(command, cmd=True)
-        else:
-            raise Exception(str(instance_path)+' path was not found on instance')
-            
-    def run_distributed_jobs(self, prefix, n_jobs, scripts, profile, filesystem=None, uploads=None, upload_path='.'):
-        '''Distribute scripts and workloads across a given number of instances with a given profile'''
+        Launch a spot fleet and store it in the LinkAWS.fleets dict attribute. 
+        Each item has as the key a fleet id and as the value a dictionary the key 'instances' with its respective instances and the key 'name' if a name was submitted. 
+        Use the refresh_fleet_instances command to update the instances in each fleet 
+
+        For parameter descriptions use: help(spot_connect.fleet_methods.launch_spot_fleet)
+        The attribute ['instances'] key in each fleet is a response from describe_spot_fleet_instances of the format: 
+           
+            [{'InstanceId': 'i-07bcc7d2aq23
+              'InstanceType': 't3.micro',
+              'SpotInstanceRequestId': 'sir-ad32k5j',
+              'InstanceHealth': 'healthy'},
+             {'InstanceId': 'i-0dbec856841',
+              'InstanceType': 't3.micro',
+              'SpotInstanceRequestId': 'sir-848rwg',
+              'InstanceHealth': 'healthy'}]
+        '''
+        profiles=sutils.load_profiles()         
+        profile = profiles[profile]
+
+        # Submit a request to launch a spot fleet with the given number of instances 
+        response = launch_spot_fleet(account_number, 
+                                     n_instances=n_instances,
+                                     profile=profile, 
+                                     name=name, 
+                                     instance_profile=instance_profile,
+                                     user_data=user_data,
+                                     monitoring=monitoring,
+                                     kp_dir=kp_dir,
+                                     enable_nfs=enable_nfs,
+                                     enable_ds=enable_ds)        
+        # Get the request id for the fleet 
+        spot_fleet_req_id = response['SpotFleetRequestId']
+
+        # Get a list of the instances associated with the fleet 
+        fleet_instances = get_fleet_instances(spot_fleet_req_id, region=profile['region'])
+
+        # Assign the fleet and its instances to the self.fleets attribute
+        self.fleets[spot_fleet_req_id] = {}        
+        self.fleets[spot_fleet_req_id]['instances'] = fleet_instances['ActiveInstances']
+        self.fleets[spot_fleet_req_id]['region'] = profile['region']
+        if name is not None: 
+            self.fleets[spot_fleet_req_id]['name'] = name
+    
+        if return_fid:
+            return spot_fleet_req_id
         
-        if filesystem is not None: 
-            fs = filesystem
-        else: 
-            fs = self.efs
-            
+    def refresh_fleet_instances(self, fleet_id=None, region=None):
+        '''Refresh the list of instances for a given fleet. If no fleet is submitted refresh all in self.fleets'''
+        if fleet_id is not None: 
+            if fleet_id not in self.fleets:
+                self.fleets[fleet_id] = {} 
+            if region is None: 
+                self.fleets[fleet_id]['instances'] = get_fleet_instances(fleet_id, self.fleets[fleet_id]['region'])
+            else: 
+                self.fleets[fleet_id]['instances'] = get_fleet_instances(fleet_id, region)
+        for fleet in self.fleets: 
+            if region is None: 
+                self.fleets[fleet]['instances'] = get_fleet_instances(fleet, self.fleets[fleet]['region'])
+            else: 
+                self.fleets[fleet_id]['instances'] = get_fleet_instances(fleet_id, region)
 
-        try: 
-            assert len(scripts) == n_jobs
-        except: 
-            raise Exception('The number of scripts must be equal to the number of instances')
 
-        if uploads is not None: 
-            try:
-                assert len(uploads)==n_jobs
-            except: 
-                raise Exception('If uploading material to each instance, must provide an equal number of materials and instances')
-                
+    def run_distributed_jobs(self, account_number, prefix, n_jobs, profile, user_data=None, instance_profile=''):
+        '''
+        Distribute scripts and workloads across a given number of instances with a given profile
+        __________
+        parameters
+        - prefix : str. Name given to each instance of fleet 
+        - n_jobs : int. Number of different instances to launch (if use_fleet=True, fleet will request this number of instances).
+        - scripts : list. List of scripts formatted as strings (not filenames, the actual bash scripts with new line delimiters), note len(scripts) == n_jobs
+        - profile : str. The name of the profile to use for the instances.
+        - user_data : list. len(user_data) == n_jobs
+        '''
+        if user_data is not None: 
+            assert type(user_data)==list
+            assert len(user_data)==n_jobs                            
+        
         for nn in range(n_jobs): 
+            # Launch the spot fleet 
+            assert account_number is not None 
+            if user_data is None: 
+                self.launch_fleet(account_number, 1, profile, name=prefix, instance_profile=instance_profile, monitoring=True, kp_dir=self.kp_dir)                    
+            else:
+                self.launch_fleet(account_number, 1, profile, name=prefix, user_data=user_data[nn], instance_profile=instance_profile, monitoring=True, kp_dir=self.kp_dir)    
 
-            self.launch_instance(prefix+'_'+str(nn), profile=profile, filesystem=fs, efs_mount=None, new_mount=None)
 
-            if uploads is not None: 
-                self.instances[prefix+'_'+str(nn)].upload(uploads[nn], upload_path)
+    def setup_fleet(self, account_number, prefix, n_jobs, profile, instance_profile='', return_fid=True): 
+        assert account_number is not None
+        fid = self.launch_fleet(account_number, n_jobs, profile, name=prefix, instance_profile=instance_profile, monitoring=True, kp_dir=self.kp_dir, return_fid=return_fid)
+        return fid
 
-            self.instances[prefix+'_'+str(nn)].run(scripts[nn], cmd=True)            		
-            
-            clear_output(wait=True)
-            print('Job %s Launched' % str(nn))
+    def get_fleet_iids(self, fid=None, region=None):
+        self.refresh_fleet_instances(fleet_id=fid, region=region)
+        fleet_instances = {} 
+        if fid is not None: 
+            fleet_instances[fid] = []
+            for active_instance in self.fleets[fid]['instances']['ActiveInstances']:
+                fleet_instances[fid].append(active_instance['InstanceId'])
+        else: 
+            for fid in self.fleets: 
+                fleet_instances[fid] = []
+                for active_instance in self.fleets[fid]['instances']['ActiveInstances']:
+                    fleet_instances[fid].append(active_instance['InstanceId'])
+        
+        return fleet_instances
+    
+    def distribute_scripts_on_instances(self, instance_ids, scripts):        
+        for inum, iid in enumerate(instance_ids): 
+            clear_output()
+            self.launch_instance(iid, instance_id=True, scripts=[scripts[inum]])
+                        
+
+    def run_sloppy_distributed_jobs(self, account_num, prefix, n_jobs, profile, region, scripts, instance_profile='', boot_wait_time=5):
+                
+        fid = self.setup_fleet(account_num, prefix, n_jobs, profile, instance_profile=instance_profile, return_fid=True)
+
+        fleet_instances = [] 
+        while len(fleet_instances)==0: 
+            time.sleep(boot_wait_time)
+
+            fleet_instances = self.get_fleet_iids(fid=fid, region=region)
+            fleet_instances = fleet_instances[fid]
+
+        self.distribute_scripts_on_instances(fleet_instances,
+                                             scripts)                                   

@@ -1,4 +1,0 @@
-{
-	'us-east-2' : 'ami-0c6bb3d47bb198095' # deep learning framework linux 
-	'us-west-2' : 'ami-0859ec69e0492368e' # deep learning framework linux
-}
