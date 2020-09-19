@@ -94,6 +94,10 @@ class SpotInstance:
         - firewall : str. Firewall settings
         '''
 
+        self.profile = None 
+
+        profiles=sutils.load_profiles()         
+
         if instance_id: 
             self.using_id = True 
         else: 
@@ -102,17 +106,13 @@ class SpotInstance:
         self.name = name 
         self.client = None         
 
-        self.profile = None 
-
-        profiles=sutils.load_profiles()         
-
         if profile is None: 
             if not self.using_id:
                 raise Exception('Must specify a profile')  
             else:
                 self.profile = profiles[list(profiles.keys())[0]]
         else: 
-            self.profile=copy.deepcopy(SpotInstance.profiles[profile])        
+            self.profile=copy.deepcopy(profiles[profile])        
 
         if key_pair is not None:
             self.profile['key_pair']=(key_pair, key_pair+'.pem')

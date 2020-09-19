@@ -239,6 +239,7 @@ class InstanceManager:
                      user_data=None,
                      instance_profile='',
                      monitoring=True,
+                     availability_zone=None,
                      kp_dir=None, 
                      enable_nfs=True,
                      enable_ds=True,
@@ -271,6 +272,7 @@ class InstanceManager:
                                      instance_profile=instance_profile,
                                      user_data=user_data,
                                      monitoring=monitoring,
+                                     availability_zone=availability_zone,
                                      kp_dir=kp_dir,
                                      enable_nfs=enable_nfs,
                                      enable_ds=enable_ds)        
@@ -306,7 +308,7 @@ class InstanceManager:
                 self.fleets[fleet_id]['instances'] = get_fleet_instances(fleet_id, region)
 
 
-    def run_distributed_jobs(self, account_number, prefix, n_jobs, profile, user_data=None, instance_profile=''):
+    def run_distributed_jobs(self, account_number, prefix, n_jobs, profile, availability_zone=None, user_data=None, instance_profile=''):
         '''
         Distribute scripts and workloads across a given number of instances with a given profile
         __________
@@ -325,9 +327,9 @@ class InstanceManager:
             # Launch the spot fleet 
             assert account_number is not None 
             if user_data is None: 
-                self.launch_fleet(account_number, 1, profile, name=prefix, instance_profile=instance_profile, monitoring=True, kp_dir=self.kp_dir)                    
+                self.launch_fleet(account_number, 1, profile, name=prefix, instance_profile=instance_profile, availabilty_zone=availability_zone, monitoring=True, kp_dir=self.kp_dir)                    
             else:
-                self.launch_fleet(account_number, 1, profile, name=prefix, user_data=user_data[nn], instance_profile=instance_profile, monitoring=True, kp_dir=self.kp_dir)    
+                self.launch_fleet(account_number, 1, profile, name=prefix, user_data=user_data[nn], instance_profile=instance_profile, availabilty_zone=availability_zone, monitoring=True, kp_dir=self.kp_dir)    
 
 
     def setup_fleet(self, account_number, prefix, n_jobs, profile, instance_profile='', return_fid=True): 

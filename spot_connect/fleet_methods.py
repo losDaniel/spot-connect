@@ -27,6 +27,7 @@ def launch_spot_fleet(account_number,
                       user_data=None, 
                       instance_profile='',
                       monitoring=True,
+                      availability_zone=None,
                       kp_dir=None,
                       enable_nfs=True,
                       enable_ds=True):
@@ -85,7 +86,7 @@ def launch_spot_fleet(account_number,
         'ImageId': profile['image_id'],          # AWS image ID. List available programatically or through launch wizard 
         'InstanceType': profile['instance_type'],# Instance type. List available programatically or through wizard or at https://aws.amazon.com/ec2/spot/pricing/ 
         'KeyName': profile['key_pair'][0],       # Name for the key pair
-        'Monitoring' : {'Enabled': monitoring},                        # Enable monitoring
+        'Monitoring' : {'Enabled': monitoring},  # Enable monitoring
     }]
     
     if instance_profile!='':
@@ -94,6 +95,10 @@ def launch_spot_fleet(account_number,
         }
     if user_data is not None: 
         launch_specs[0]['UserData']= user_data
+    if availability_zone is not None: 
+        launch_specs[0]['Placement']= {
+                'AvailabilityZone': availability_zone, 
+        }
         
     response = client.request_spot_fleet(
         DryRun=False,

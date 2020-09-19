@@ -180,3 +180,13 @@ def get_filesystem_dns(file_system_name, region):
     return filesystem_dns
 
 
+def get_mounttarget_dns(file_system_name, region, availability_zone):
+
+    # Launch or connect to an EFS 
+    file_system = launch_efs(file_system_name, region=region)                  
+    file_system_id = file_system['FileSystemId']
+
+    # Format : availability-zone.file-system-id.efs.aws-region.amazonaws.com
+    mount_target_dns = availability_zone+'.'+file_system_id+'.efs.'+region+'.amazonaws.com'
+    
+    return mount_target_dns
