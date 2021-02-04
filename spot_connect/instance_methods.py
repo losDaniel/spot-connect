@@ -104,7 +104,7 @@ def upload_to_ec2(instance, user_name, files, remote_dir='.', kp_dir=None, verbo
     if kp_dir is None: 
         kp_dir = sutils.get_default_kp_dir()
 
-    client = ec2_methods.connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username='ec2-user',port=22)
+    client = ec2_methods.connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username=user_name,port=22)
     if verbose:
         print('Connected. Uploading files...')
     stfp = client.open_sftp()
