@@ -57,7 +57,7 @@ def pull_root():
 def load_profiles():
     '''Load the profiles from the package profile.txt file'''
     
-    profile = [f for f in list(absoluteFilePaths(pull_root()+'/data/')) if f.split('\\')[-1]=='profiles.txt'][0]    
+    profile = [f for f in list(absoluteFilePaths(os.path.join(pull_root(),'data'))) if os.path.split(f)[-1]=='profiles.txt'][0]    
     
     with open(profile,'r') as f:
         profiles = ast.literal_eval(f.read())
@@ -68,7 +68,7 @@ def load_profiles():
 
 def save_profiles(profiles):
     '''Save the profile dict str in a .txt file'''
-    profile_file = [f for f in list(absoluteFilePaths(pull_root()+'/data/')) if f.split('\\')[-1]=='profiles.txt'][0]    
+    profile_file = [f for f in list(absoluteFilePaths(os.path.join(pull_root(),'data'))) if os.path.split(f)[-1]=='profiles.txt'][0]    
     
     #ptosave = ast.literal_eval(profile_str)
     print(profile_file)
@@ -122,7 +122,7 @@ def printTotals(transferred, toBeTransferred):
 
 def get_package_kp_dir():
     '''Get the key-pair directory'''
-    kpfile = [f for f in list(absoluteFilePaths(pull_root()+'/data/')) if f.split('\\')[-1]=='key_pair_default_dir.txt'][0]    
+    kpfile = [f for f in list(absoluteFilePaths(os.path.join(pull_root(),'data'))) if os.path.split(f)[-1]=='key_pair_default_dir.txt'][0]    
     with open(kpfile,'r') as f: 
         default_path = f.read()
         f.close()
@@ -135,7 +135,7 @@ def get_default_kp_dir():
 
 def set_default_kp_dir(directory : str): 
     '''Set the default key pair directory'''
-    kpfile = [f for f in list(absoluteFilePaths(pull_root()+'/data/')) if f.split('\\')[-1]=='key_pair_default_dir.txt'][0]    
+    kpfile = [f for f in list(absoluteFilePaths(os.path.join(pull_root(),'data'))) if os.path.split(f)[-1]=='key_pair_default_dir.txt'][0]    
     with open(kpfile,'w') as f: 
         f.write(directory)
         f.close()
@@ -236,7 +236,7 @@ def split_workloads(n_jobs, workload, wrkdir=None, filename=None):
     '''    
     
     if wrkdir is None: 
-        wrkdir = pull_root()+'/data/'
+        wrkdir = os.path.join(pull_root(),'data')
         if not os.path.exists(wrkdir): 
             try: 
                 os.mkdir(wrkdir)
@@ -285,7 +285,7 @@ class CurrentIdLog:
         date = datetime.today().date()
         
         if logdir is None: 
-            self.hd=pull_root()+'/data/'
+            self.hd=os.path.join(pull_root(),'data')
         else: 
             self.hd=logdir
         
