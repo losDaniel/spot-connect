@@ -304,7 +304,7 @@ class SpotInstance:
             scripts=[scripts]
         elif type(scripts)!=list:
             raise TypeError('scripts must be string or list of strings')
-        
+        output = ''
         for script in scripts:
             if not cmd:
                 print('\nExecuting script "%s"...' % str(script))
