@@ -1,3 +1,0 @@
-[console_scripts]
-spot_connect = spot_connect.connect:main
-

@@ -12,7 +12,7 @@ the instance.
 MIT License 2020
 """
 
-import sys, boto3 
+import sys, boto3, os
 from spot_connect import ec2_methods, sutils, interactive
 
 def run_script(instance, user_name, script, cmd=False, port=22, kp_dir=None, return_output=False):
@@ -104,7 +104,7 @@ def upload_to_ec2(instance, user_name, files, remote_dir='.', kp_dir=None, verbo
     if kp_dir is None: 
         kp_dir = sutils.get_default_kp_dir()
 
-    client = ec2_methods.connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username='ec2-user',port=22)
+    client = ec2_methods.connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username=user_name,port=22)
     if verbose:
         print('Connected. Uploading files...')
     stfp = client.open_sftp()
@@ -112,8 +112,8 @@ def upload_to_ec2(instance, user_name, files, remote_dir='.', kp_dir=None, verbo
     try: 
     	for f in files: 
             if verbose:
-                print('Uploading %s' % str(f.split('\\')[-1]))
-            stfp.put(f, remote_dir+'/'+f.split('\\')[-1], callback=sutils.printTotals, confirm=True)
+                print('Uploading %s' % str(os.path.split(f)[-1]))
+            stfp.put(f, os.path.join(remote_dir, os.path.split(f)[-1]), callback=sutils.printTotals, confirm=True)
 
     except Exception as e:
         raise e
